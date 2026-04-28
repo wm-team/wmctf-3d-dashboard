@@ -2459,3 +2459,55 @@ button {
 .panel-heat::before {
   opacity: 0.42;
 }
+
+/* 新链路：外围主信息模块进入 Three.js 统一 3D 舱体，不再由 DOM 面板做独立扭曲 */
+.ctf-screen--immersive {
+  grid-template-rows: 76px minmax(0, 1fr) 28px;
+}
+
+.immersive-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.immersive-stage::before,
+.immersive-stage::after {
+  position: absolute;
+  content: '';
+  pointer-events: none;
+}
+
+.immersive-stage::before {
+  inset: -3% 0 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 50% 47%, rgba(255, 210, 31, 0.12), transparent 21%),
+    radial-gradient(ellipse at 50% 54%, rgba(155, 221, 255, 0.18), transparent 45%),
+    linear-gradient(90deg, rgba(255, 210, 31, 0.08), transparent 14%, transparent 86%, rgba(155, 221, 255, 0.08));
+  opacity: 0.86;
+}
+
+.immersive-stage::after {
+  top: 49%;
+  left: 50%;
+  z-index: 1;
+  width: 1510px;
+  height: 690px;
+  border: 1px solid rgba(216, 238, 246, 0.14);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 14px rgba(255, 255, 255, 0.012),
+    0 0 0 28px rgba(255, 210, 31, 0.012),
+    0 0 80px rgba(155, 221, 255, 0.1) inset,
+    0 0 40px rgba(255, 210, 31, 0.07);
+  transform: translate(-50%, -50%) rotateX(58deg);
+  transform-origin: center;
+}
+
+.immersive-stage .scene-canvas {
+  position: relative;
+  z-index: 2;
+}

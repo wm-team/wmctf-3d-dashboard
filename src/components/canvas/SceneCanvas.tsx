@@ -2,24 +2,26 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { PerspectiveCamera, Stars } from '@react-three/drei'
 import { Suspense } from 'react'
 import { DataCore } from '@/components/canvas/DataCore'
+import { HudPanelMeshes } from '@/components/canvas/HudPanelMeshes'
+import type { CtfSnapshot } from '@/types/ctf'
 
 function CameraParallax() {
   useFrame((state) => {
     const { camera, pointer } = state
-    const targetX = pointer.x * 0.72
-    const targetY = 4.15 + pointer.y * 0.22
-    const targetZ = 8.85 - pointer.y * 0.16
+    const targetX = pointer.x * 0.36
+    const targetY = 3.85 + pointer.y * 0.18
+    const targetZ = 9.85 - pointer.y * 0.1
 
     camera.position.x += (targetX - camera.position.x) * 0.055
     camera.position.y += (targetY - camera.position.y) * 0.055
     camera.position.z += (targetZ - camera.position.z) * 0.055
-    camera.lookAt(0, 0, 0)
+    camera.lookAt(pointer.x * 0.42, 0.24 + pointer.y * 0.16, -0.16)
   })
 
   return null
 }
 
-export function SceneCanvas() {
+export function SceneCanvas({ snapshot }: { snapshot: CtfSnapshot }) {
   return (
     <Canvas
       className="scene-canvas"
@@ -27,8 +29,8 @@ export function SceneCanvas() {
       dpr={[1, 2]}
       resize={{ scroll: true, offsetSize: true, debounce: { scroll: 0, resize: 0 } }}
     >
-      <fog attach="fog" args={['#05090c', 12, 34]} />
-      <PerspectiveCamera makeDefault position={[0, 4.15, 8.85]} fov={42} />
+      <fog attach="fog" args={['#05090c', 10, 32]} />
+      <PerspectiveCamera makeDefault position={[0, 3.85, 9.85]} fov={41} />
       <ambientLight intensity={0.3} />
       <pointLight position={[7, 7, 4]} intensity={1.7} color="#aee9ff" />
       <pointLight position={[-6, 4, 5]} intensity={1.15} color="#f6d252" />
@@ -43,7 +45,10 @@ export function SceneCanvas() {
           fade
           speed={0.22}
         />
-        <DataCore />
+        <HudPanelMeshes snapshot={snapshot} />
+        <group scale={0.72} position={[0, -0.02, -0.08]}>
+          <DataCore />
+        </group>
       </Suspense>
     </Canvas>
   )
