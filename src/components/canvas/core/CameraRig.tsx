@@ -30,9 +30,9 @@ export function CameraRig({
     if (activeCategory) {
       const focusWorld = getFocusWorldPoint(activeCategory, dataCoreGroup)
       const side = activeCategory === 'web' || activeCategory === 'forensics' ? -1 : 1
-      targetPosition.copy(focusWorld).add(new Vector3(side * 1.05 + pointer.x * 0.05, 2.72 + pointer.y * 0.04, 5.05))
-      targetLookAt.copy(focusWorld).add(new Vector3(side * 0.18 + pointer.x * 0.02, 0.38 + pointer.y * 0.02, -0.28))
-      camera.fov += (39 - camera.fov) * 0.065
+      targetPosition.copy(focusWorld).add(new Vector3(side * 1.05 + pointer.x * 0.05, 2.72 + pointer.y * 0.04, 5.1))
+      targetLookAt.copy(focusWorld).add(new Vector3(side * 0.18 + pointer.x * 0.02, 0.42 + pointer.y * 0.02, -0.22))
+      camera.fov += (39.6 - camera.fov) * 0.065
     } else {
       targetPosition.set(
         overviewPosition.x + pointer.x * 0.42,

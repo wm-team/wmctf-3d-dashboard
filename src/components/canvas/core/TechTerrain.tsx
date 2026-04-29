@@ -9,6 +9,7 @@ import {
   Float32BufferAttribute,
   ShaderMaterial,
   TubeGeometry,
+  Vector2,
   Vector3,
   type Group,
 } from 'three'
@@ -16,6 +17,7 @@ import {
   COLORS,
   categoryNodes,
   focusTerrainHeight,
+  getCategoryNodeByKey,
   terrainHeight,
   terrainRadius,
   type CategoryKey,
@@ -137,6 +139,7 @@ const fragmentShader = `
   uniform vec3 uCyan;
   uniform vec3 uYellow;
   uniform float uFocusStrength;
+  uniform vec2 uFocusCenter;
   varying float vHeight;
   varying vec3 vLocalPos;
 
@@ -158,15 +161,20 @@ const fragmentShader = `
     float centerGlow = 1.0 - smoothstep(0.2, 2.45, radius);
     float rimGlow = smoothstep(3.65, 4.54, radius) * edge;
     float breathe = 0.82 + sin(uTime * 0.72) * 0.08;
+    float focusDistance = length(vLocalPos.xz - uFocusCenter);
+    float focusMask = 1.0 - smoothstep(1.22, 3.18, focusDistance);
+    float focusDim = mix(1.0, mix(0.16, 1.0, focusMask), uFocusStrength);
+    float lineDim = mix(1.0, mix(0.18, 1.0, focusMask), uFocusStrength);
 
     vec3 color = mix(uDeep, uBase, edge);
-    color += uCyan * line * (0.48 + uFocusStrength * 0.08) * breathe;
-    color += uYellow * majorLine * (0.68 + uFocusStrength * 0.1);
-    color += uCyan * grid * 0.025 * edge;
-    color += uYellow * centerGlow * 0.16;
-    color += uCyan * rimGlow * 0.16;
+    color += uCyan * line * (0.48 + uFocusStrength * 0.08) * breathe * lineDim;
+    color += uYellow * majorLine * (0.68 + uFocusStrength * 0.1) * lineDim;
+    color += uCyan * grid * 0.025 * edge * lineDim;
+    color += uYellow * centerGlow * 0.16 * lineDim;
+    color += uCyan * rimGlow * 0.16 * mix(1.0, 0.42, uFocusStrength);
+    color = mix(color * 0.34, color, focusDim);
 
-    float alpha = (0.48 + line * 0.16 + majorLine * 0.22 + centerGlow * 0.06 + uFocusStrength * 0.02) * edge;
+    float alpha = (0.48 + line * 0.16 * lineDim + majorLine * 0.22 * lineDim + centerGlow * 0.06 + uFocusStrength * 0.02) * edge * focusDim;
     gl_FragColor = vec4(color, alpha);
   }
 `
@@ -190,6 +198,7 @@ function useTerrainMaterial() {
           uDeep: { value: new Color(COLORS.terrainDeep) },
           uCyan: { value: new Color(COLORS.cyan) },
           uYellow: { value: new Color(COLORS.yellow) },
+          uFocusCenter: { value: new Vector2(0, 0) },
         },
       }),
     [],
@@ -229,6 +238,10 @@ export function TechTerrain({
     terrainMaterialRef.current.uniforms.uTime.value = state.clock.elapsedTime
     focusStrength.current += ((activeCategory ? 1 : 0) - focusStrength.current) * 0.08
     terrainMaterialRef.current.uniforms.uFocusStrength.value = focusStrength.current
+    if (activeCategory) {
+      const node = getCategoryNodeByKey(activeCategory)
+      terrainMaterialRef.current.uniforms.uFocusCenter.value.set(node.x, node.z)
+    }
     if (terrainRef.current) terrainRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.18) * 0.018
   })
 
@@ -253,7 +266,7 @@ export function TechTerrain({
         <meshBasicMaterial
           color={COLORS.cyanSoft}
           transparent
-          opacity={0.12}
+          opacity={activeCategory ? 0.035 : 0.12}
           side={DoubleSide}
           blending={AdditiveBlending}
           depthWrite={false}
@@ -271,7 +284,7 @@ export function TechTerrain({
           color={COLORS.cyanSoft}
           wireframe
           transparent
-          opacity={0.022}
+          opacity={activeCategory ? 0.006 : 0.022}
           blending={AdditiveBlending}
           depthWrite={false}
         />
@@ -282,7 +295,7 @@ export function TechTerrain({
         <meshBasicMaterial
           color={COLORS.yellow}
           transparent
-          opacity={0.16}
+          opacity={activeCategory ? 0.055 : 0.16}
           blending={AdditiveBlending}
           depthWrite={false}
         />
@@ -293,7 +306,7 @@ export function TechTerrain({
         <meshBasicMaterial
           color={COLORS.yellow}
           transparent
-          opacity={0.58}
+          opacity={activeCategory ? 0.22 : 0.58}
           blending={AdditiveBlending}
           depthWrite={false}
         />
@@ -304,7 +317,7 @@ export function TechTerrain({
         <meshBasicMaterial
           color={COLORS.cyan}
           transparent
-          opacity={0.36}
+          opacity={activeCategory ? 0.12 : 0.36}
           blending={AdditiveBlending}
           depthWrite={false}
         />
@@ -315,7 +328,7 @@ export function TechTerrain({
         <meshBasicMaterial
           color={COLORS.yellow}
           transparent
-          opacity={0.28}
+          opacity={activeCategory ? 0.08 : 0.28}
           blending={AdditiveBlending}
           depthWrite={false}
         />
@@ -323,7 +336,7 @@ export function TechTerrain({
 
       {contourGeometries.map(({ color, geometry, nodeKey, opacity }, index) => {
         const selected = activeCategory === nodeKey
-        const nextOpacity = activeCategory ? (selected ? Math.min(opacity, 0.08) : 0.025) : opacity
+        const nextOpacity = activeCategory ? (selected ? Math.min(opacity, 0.07) : 0.006) : opacity
         return (
         <mesh key={`contour-${index}`} geometry={geometry}>
           <meshBasicMaterial

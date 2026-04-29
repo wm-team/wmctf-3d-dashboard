@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { SceneCanvas } from '@/components/canvas/SceneCanvas'
+import { useEffect, useRef, useState } from 'react'
+import { SceneCanvas, type DashboardViewMode } from '@/components/canvas/SceneCanvas'
 import { WmctfLogo } from '@/components/hud/WmctfLogo'
 import type { CtfSnapshot } from '@/types/ctf'
 
@@ -7,10 +7,13 @@ type Props = {
   snapshot: CtfSnapshot
 }
 
-const tabs = ['实时态势', '战队视图', '题目视图', '攻击视图']
+const tabs: DashboardViewMode[] = ['实时态势', '战队视图', '题目视图', '攻击视图']
 
 export function CtfHud({ snapshot }: Props) {
   const screenRef = useRef<HTMLDivElement>(null)
+  const [viewMode, setViewMode] = useState<DashboardViewMode>(
+    tabs.includes(snapshot.phase as DashboardViewMode) ? (snapshot.phase as DashboardViewMode) : '实时态势',
+  )
 
   useEffect(() => {
     const screen = screenRef.current
@@ -56,7 +59,8 @@ export function CtfHud({ snapshot }: Props) {
           {tabs.map((tab) => (
             <button
               key={tab}
-              className={tab === snapshot.phase ? 'is-active' : undefined}
+              className={tab === viewMode ? 'is-active' : undefined}
+              onClick={() => setViewMode(tab)}
               type="button"
             >
               {tab}
@@ -71,7 +75,7 @@ export function CtfHud({ snapshot }: Props) {
       </header>
 
       <main className="immersive-stage" aria-label="CTF 赛事三维态势界面">
-        <SceneCanvas snapshot={snapshot} />
+        <SceneCanvas snapshot={snapshot} viewMode={viewMode} />
       </main>
 
       <footer className="screen-footer">

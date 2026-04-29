@@ -164,7 +164,6 @@ export function CategoryDetailPanel({
 }) {
   const group = useRef<Group>(null)
   const panelMaterial = useRef<MeshBasicMaterial>(null)
-  const glowMaterial = useRef<MeshBasicMaterial>(null)
   const buttonMaterial = useRef<MeshBasicMaterial>(null)
   const opacity = useRef(0)
   const forward = useMemo(() => new Vector3(), [])
@@ -187,7 +186,6 @@ export function CategoryDetailPanel({
   useFrame((state) => {
     opacity.current += ((node ? 1 : 0) - opacity.current) * 0.08
     if (panelMaterial.current) panelMaterial.current.opacity = opacity.current * 0.96
-    if (glowMaterial.current) glowMaterial.current.opacity = opacity.current * 0.12
     if (buttonMaterial.current) buttonMaterial.current.opacity = opacity.current * 0.82
     if (!group.current || !node) return
 
@@ -218,18 +216,6 @@ export function CategoryDetailPanel({
           map={texture}
           transparent
           opacity={0}
-          depthTest={false}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh position={[0, 0, -0.03]} renderOrder={101}>
-        <planeGeometry args={[2.3, 1.52]} />
-        <meshBasicMaterial
-          ref={glowMaterial}
-          color={node.accentColor}
-          transparent
-          opacity={0}
-          blending={AdditiveBlending}
           depthTest={false}
           depthWrite={false}
         />

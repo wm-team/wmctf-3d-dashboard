@@ -11,9 +11,17 @@ import {
   SRGBColorSpace,
   type Group,
 } from 'three'
+import {
+  challengeData,
+  getChallengeCategoryStats,
+  getCategoryMeta,
+  getHotChallenges,
+} from '@/components/canvas/challenge/challengeData'
+import type { Challenge } from '@/components/canvas/challenge/challengeTypes'
 import type { CtfSnapshot } from '@/types/ctf'
 
 type PanelKind = 'rank' | 'timer' | 'solves' | 'donut' | 'line' | 'heat'
+type HudViewMode = 'realtime' | 'challenge'
 
 type PanelConfig = {
   accent: string
@@ -654,7 +662,301 @@ function drawHeatPanel(
   ctx.textAlign = 'left'
 }
 
-function drawTexture(kind: PanelKind, snapshot: CtfSnapshot, width: number, height: number, accent: string) {
+function drawChallengeCategoryPanel(ctx: CanvasRenderingContext2D, width: number, height: number, accent: string) {
+  drawPanelBase(ctx, width, height, '分类统计', 'CHALLENGE CATEGORIES', accent)
+  const stats = getChallengeCategoryStats()
+  const left = 62
+  const top = 132
+  ctx.fillStyle = 'rgba(203, 216, 221, 0.72)'
+  setFont(ctx, 21, 800)
+  ctx.fillText('分类', left, top)
+  ctx.textAlign = 'right'
+  ctx.fillText('题目 / 已解 / 热门', width - 68, top)
+  ctx.textAlign = 'left'
+
+  stats.forEach((stat, index) => {
+    const y = top + 64 + index * 104
+    ctx.strokeStyle = 'rgba(226, 242, 247, 0.14)'
+    ctx.beginPath()
+    ctx.moveTo(left - 16, y + 48)
+    ctx.lineTo(width - 60, y + 48)
+    ctx.stroke()
+    ctx.fillStyle = stat.accent
+    ctx.fillRect(left, y - 18, 12, 58)
+    ctx.fillStyle = '#f7fbff'
+    setFont(ctx, 35, 900)
+    ctx.fillText(stat.label, left + 30, y + 12)
+    ctx.fillStyle = 'rgba(203, 216, 221, 0.66)'
+    setMonoFont(ctx, 20, 800)
+    ctx.fillText(`${stat.percent}% SOLVED`, left + 30, y + 42)
+    ctx.textAlign = 'right'
+    ctx.fillStyle = '#f4fbff'
+    setMonoFont(ctx, 32, 900)
+    ctx.fillText(`${stat.total} / ${stat.solved} / ${stat.hot}`, width - 68, y + 12)
+    ctx.textAlign = 'left'
+  })
+}
+
+function drawChallengeSummaryPanel(ctx: CanvasRenderingContext2D, width: number, height: number, accent: string) {
+  drawPanelBase(ctx, width, height, '', '', accent)
+  ctx.clearRect(0, 0, width, 84)
+  const total = challengeData.length
+  const solved = challengeData.filter((challenge) => challenge.status === 'solved').length
+  const hot = challengeData.filter((challenge) => challenge.status === 'hot').length
+  const locked = challengeData.filter((challenge) => challenge.status === 'locked').length
+
+  ctx.strokeStyle = accent
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.moveTo(width * 0.08, 34)
+  ctx.lineTo(width * 0.92, 34)
+  ctx.stroke()
+
+  ctx.fillStyle = '#dbe4e8'
+  setFont(ctx, 32, 900)
+  ctx.fillText('题目视图', 130, 122)
+  ctx.fillStyle = '#f4f7f8'
+  setMonoFont(ctx, 84, 900)
+  ctx.fillText('CHALLENGE ATLAS', 130, 208)
+
+  const metrics = [
+    ['TOTAL', total, '#f4fbff'],
+    ['SOLVED', solved, '#69f6ff'],
+    ['HOT', hot, '#ffd21f'],
+    ['LOCKED', locked, '#87949c'],
+  ] as const
+  metrics.forEach(([label, value, color], index) => {
+    const x = width - 720 + index * 170
+    ctx.fillStyle = color
+    setMonoFont(ctx, 58, 900)
+    ctx.textAlign = 'center'
+    ctx.fillText(String(value).padStart(2, '0'), x, 150)
+    ctx.fillStyle = 'rgba(205, 216, 220, 0.74)'
+    setMonoFont(ctx, 20, 800)
+    ctx.fillText(label, x, 188)
+  })
+  ctx.textAlign = 'left'
+}
+
+function drawChallengeDetailPanel(
+  ctx: CanvasRenderingContext2D,
+  selectedChallenge: Challenge | null,
+  width: number,
+  height: number,
+  accent: string,
+) {
+  drawPanelBase(ctx, width, height, '当前题目详情', 'SELECTED CHALLENGE', accent)
+  if (!selectedChallenge) {
+    ctx.fillStyle = '#f7fbff'
+    setFont(ctx, 42, 900)
+    ctx.fillText('等待节点选择', 72, 170)
+    ctx.fillStyle = 'rgba(203, 216, 221, 0.72)'
+    setFont(ctx, 25, 700)
+    ctx.fillText('点击中间图谱中的题目节点查看详情。', 72, 224)
+  } else {
+    const meta = getCategoryMeta(selectedChallenge.category)
+    ctx.fillStyle = meta.accent
+    setMonoFont(ctx, 26, 900)
+    ctx.fillText(`${meta.label.toUpperCase()} / ${selectedChallenge.difficulty.toUpperCase()}`, 72, 140)
+    ctx.fillStyle = '#f7fbff'
+    setFont(ctx, 46, 900)
+    ctx.fillText(selectedChallenge.title, 72, 206)
+    const rows = [
+      ['分值', selectedChallenge.points],
+      ['已解', selectedChallenge.solvedCount],
+      ['提交', selectedChallenge.submitCount],
+      ['状态', selectedChallenge.status.toUpperCase()],
+    ]
+    rows.forEach(([label, value], index) => {
+      const y = 298 + index * 78
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.055)'
+      ctx.fillRect(72, y - 38, width - 144, 54)
+      ctx.fillStyle = 'rgba(203, 216, 221, 0.72)'
+      setFont(ctx, 23, 800)
+      ctx.fillText(String(label), 96, y)
+      ctx.textAlign = 'right'
+      ctx.fillStyle = index === rows.length - 1 ? meta.accent : '#f7fbff'
+      setMonoFont(ctx, 31, 900)
+      ctx.fillText(String(value), width - 96, y)
+      ctx.textAlign = 'left'
+    })
+    ctx.fillStyle = 'rgba(203, 216, 221, 0.72)'
+    setFont(ctx, 23, 800)
+    ctx.fillText('FIRST BLOOD', 72, height - 106)
+    ctx.fillStyle = '#ffd21f'
+    setFont(ctx, 31, 900)
+    ctx.fillText(selectedChallenge.firstBloodTeam ?? '尚未产生', 72, height - 62)
+  }
+
+  ctx.fillStyle = 'rgba(155, 221, 255, 0.18)'
+  ctx.fillRect(72, height - 36, width - 144, 2)
+}
+
+function drawChallengeDonutPanel(ctx: CanvasRenderingContext2D, width: number, height: number, accent: string) {
+  drawPanelBase(ctx, width, height, '题目分类分布', 'ATLAS DISTRIBUTION', accent)
+  const stats = getChallengeCategoryStats()
+  const total = Math.max(challengeData.length, 1)
+  const centerX = 228
+  const centerY = 288
+  let cursor = -Math.PI / 2
+  stats.forEach((stat) => {
+    const angle = (stat.total / total) * Math.PI * 2
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, 132, cursor, cursor + angle)
+    ctx.lineWidth = 54
+    ctx.strokeStyle = stat.accent
+    ctx.stroke()
+    cursor += angle
+  })
+  ctx.fillStyle = '#071014'
+  ctx.beginPath()
+  ctx.arc(centerX, centerY, 72, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#fff'
+  setMonoFont(ctx, 58, 900)
+  ctx.textAlign = 'center'
+  ctx.fillText(String(total), centerX, centerY + 6)
+  ctx.fillStyle = '#c5d0d5'
+  setFont(ctx, 20, 700)
+  ctx.fillText('ATLAS', centerX, centerY + 45)
+  ctx.textAlign = 'left'
+
+  stats.forEach((stat, index) => {
+    const x = 450
+    const y = 174 + index * 52
+    ctx.fillStyle = stat.accent
+    ctx.fillRect(x, y - 13, 17, 17)
+    ctx.fillStyle = '#eff6f8'
+    setFont(ctx, 25, 700)
+    ctx.fillText(stat.label, x + 34, y + 2)
+    ctx.fillStyle = '#ffe17c'
+    setMonoFont(ctx, 26, 900)
+    ctx.fillText(String(stat.total), x + 198, y + 2)
+    ctx.fillStyle = '#c3cdd2'
+    setMonoFont(ctx, 21, 700)
+    ctx.fillText(`${stat.percent}%`, x + 243, y + 2)
+  })
+}
+
+function drawChallengeTrendPanel(ctx: CanvasRenderingContext2D, width: number, height: number, accent: string) {
+  drawPanelBase(ctx, width, height, '解题趋势', 'SOLVE TREND', accent)
+  const points = [24, 48, 73, 115, 151, 202, 248, 291, 336, 382, 438]
+  const submits = [68, 132, 211, 328, 418, 560, 688, 790, 908, 1042, 1184]
+  const chart = { x: 118, y: 126, w: width - 200, h: height - 190 }
+  const max = Math.max(...submits)
+  ctx.strokeStyle = 'rgba(226, 242, 247, 0.14)'
+  for (let i = 0; i <= 4; i += 1) {
+    const y = chart.y + (chart.h / 4) * i
+    ctx.beginPath()
+    ctx.moveTo(chart.x, y)
+    ctx.lineTo(chart.x + chart.w, y)
+    ctx.stroke()
+  }
+  const toPoint = (value: number, index: number, source: number[]) => {
+    const x = chart.x + (index / Math.max(source.length - 1, 1)) * chart.w
+    const y = chart.y + chart.h - (value / max) * chart.h
+    return [x, y] as const
+  }
+  const drawLine = (source: number[], color: string, widthPx: number) => {
+    ctx.beginPath()
+    source.forEach((value, index) => {
+      const [x, y] = toPoint(value, index, source)
+      if (index === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    })
+    ctx.strokeStyle = color
+    ctx.lineWidth = widthPx
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.stroke()
+  }
+  drawLine(submits, 'rgba(155, 221, 255, 0.48)', 4)
+  drawLine(points, '#ffd21f', 7)
+  ctx.fillStyle = '#ffd21f'
+  setMonoFont(ctx, 20, 900)
+  ctx.fillText('SOLVES', chart.x, height - 40)
+  ctx.fillStyle = 'rgba(155, 221, 255, 0.78)'
+  ctx.fillText('SUBMISSIONS', chart.x + 160, height - 40)
+}
+
+function drawChallengeHotPanel(ctx: CanvasRenderingContext2D, width: number, height: number, accent: string) {
+  drawPanelBase(ctx, width, height, '热门题目 TOP 10', 'HOT CHALLENGES', accent)
+  getHotChallenges().forEach((challenge, index) => {
+    const y = 132 + index * 74
+    const meta = getCategoryMeta(challenge.category)
+    ctx.strokeStyle = 'rgba(226, 242, 247, 0.13)'
+    ctx.beginPath()
+    ctx.moveTo(62, y + 38)
+    ctx.lineTo(width - 62, y + 38)
+    ctx.stroke()
+    ctx.fillStyle = challenge.status === 'hot' ? '#ffd21f' : meta.accent
+    setMonoFont(ctx, 25, 900)
+    ctx.fillText(String(index + 1).padStart(2, '0'), 70, y)
+    ctx.fillStyle = '#f7fbff'
+    setFont(ctx, 28, 900)
+    ctx.fillText(challenge.title, 128, y)
+    ctx.fillStyle = 'rgba(203, 216, 221, 0.72)'
+    setMonoFont(ctx, 19, 800)
+    ctx.fillText(`${meta.label.toUpperCase()} / ${challenge.difficulty.toUpperCase()}`, 128, y + 28)
+    ctx.textAlign = 'right'
+    ctx.fillStyle = '#ffd21f'
+    setMonoFont(ctx, 31, 900)
+    ctx.fillText(String(challenge.submitCount), width - 68, y)
+    ctx.textAlign = 'left'
+  })
+}
+
+function drawChallengeTexture(
+  kind: PanelKind,
+  selectedChallenge: Challenge | null,
+  width: number,
+  height: number,
+  accent: string,
+) {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return canvas
+  ctx.imageSmoothingEnabled = true
+
+  switch (kind) {
+    case 'rank':
+      drawChallengeCategoryPanel(ctx, width, height, accent)
+      break
+    case 'timer':
+      drawChallengeSummaryPanel(ctx, width, height, accent)
+      break
+    case 'solves':
+      drawChallengeDetailPanel(ctx, selectedChallenge, width, height, accent)
+      break
+    case 'donut':
+      drawChallengeDonutPanel(ctx, width, height, accent)
+      break
+    case 'line':
+      drawChallengeTrendPanel(ctx, width, height, accent)
+      break
+    case 'heat':
+      drawChallengeHotPanel(ctx, width, height, accent)
+      break
+  }
+
+  return canvas
+}
+
+function drawTexture(
+  kind: PanelKind,
+  snapshot: CtfSnapshot,
+  width: number,
+  height: number,
+  accent: string,
+  viewMode: HudViewMode,
+  selectedChallenge: Challenge | null,
+) {
+  if (viewMode === 'challenge') {
+    return drawChallengeTexture(kind, selectedChallenge, width, height, accent)
+  }
+
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -726,7 +1028,12 @@ function makeCurvedGeometry(width: number, height: number, arc: number) {
   return geometry
 }
 
-function usePanelTexture(config: PanelConfig, snapshot: CtfSnapshot) {
+function usePanelTexture(
+  config: PanelConfig,
+  snapshot: CtfSnapshot,
+  viewMode: HudViewMode,
+  selectedChallenge: Challenge | null,
+) {
   const texture = useMemo(() => {
     const canvas = drawTexture(
       config.kind,
@@ -734,6 +1041,8 @@ function usePanelTexture(config: PanelConfig, snapshot: CtfSnapshot) {
       config.texture[0],
       config.texture[1],
       config.accent,
+      viewMode,
+      selectedChallenge,
     )
     const nextTexture = new CanvasTexture(canvas)
     nextTexture.colorSpace = SRGBColorSpace
@@ -741,7 +1050,7 @@ function usePanelTexture(config: PanelConfig, snapshot: CtfSnapshot) {
     nextTexture.magFilter = LinearFilter
     nextTexture.needsUpdate = true
     return nextTexture
-  }, [config, snapshot])
+  }, [config, selectedChallenge, snapshot, viewMode])
 
   useEffect(() => () => texture.dispose(), [texture])
   return texture
@@ -751,19 +1060,21 @@ function HudPanelMesh({
   config,
   dimmed,
   index,
+  selectedChallenge,
   snapshot,
+  viewMode,
 }: {
   config: PanelConfig
   dimmed: boolean
   index: number
+  selectedChallenge: Challenge | null
   snapshot: CtfSnapshot
+  viewMode: HudViewMode
 }) {
   const group = useRef<Group>(null)
   const mainMaterial = useRef<MeshBasicMaterial>(null)
-  const glowMaterial = useRef<MeshBasicMaterial>(null)
-  const backMaterial = useRef<MeshBasicMaterial>(null)
   const opacity = useRef(1)
-  const texture = usePanelTexture(config, snapshot)
+  const texture = usePanelTexture(config, snapshot, viewMode, selectedChallenge)
   const geometry = useMemo(
     () => makeCurvedGeometry(config.width, config.height, config.arc),
     [config.arc, config.height, config.width],
@@ -774,8 +1085,6 @@ function HudPanelMesh({
   useFrame((state) => {
     opacity.current += ((dimmed ? 0.12 : 1) - opacity.current) * 0.08
     if (mainMaterial.current) mainMaterial.current.opacity = 0.94 * opacity.current
-    if (glowMaterial.current) glowMaterial.current.opacity = 0.18 * opacity.current
-    if (backMaterial.current) backMaterial.current.opacity = 0.1 * opacity.current
 
     const target = group.current
     if (!target) return
@@ -784,6 +1093,7 @@ function HudPanelMesh({
     target.position.y = config.position[1] + float + state.pointer.y * 0.035
     target.position.x = config.position[0] + state.pointer.x * (0.05 + Math.abs(side) * 0.035)
     target.position.z = config.position[2] - (dimmed ? 0.16 : 0)
+    target.scale.setScalar(target.scale.x + (1 - target.scale.x) * 0.08)
     target.rotation.x = config.rotation[0] - state.pointer.y * 0.025
     target.rotation.y = config.rotation[1] - state.pointer.x * 0.035 + side * state.pointer.y * 0.012
   })
@@ -797,42 +1107,6 @@ function HudPanelMesh({
           transparent
           opacity={0.94}
           side={DoubleSide}
-          depthTest={false}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh
-        geometry={geometry}
-        renderOrder={21}
-        scale={[1.008, 1.012, 1]}
-        position={[0, 0, 0.012]}
-        raycast={() => undefined}
-      >
-        <meshBasicMaterial
-          ref={glowMaterial}
-          map={texture}
-          transparent
-          opacity={0.18}
-          side={DoubleSide}
-          blending={AdditiveBlending}
-          depthTest={false}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh
-        geometry={geometry}
-        renderOrder={19}
-        scale={[1.026, 1.034, 1]}
-        position={[0, 0, -0.028]}
-        raycast={() => undefined}
-      >
-        <meshBasicMaterial
-          ref={backMaterial}
-          color={config.accent}
-          transparent
-          opacity={0.1}
-          side={DoubleSide}
-          blending={AdditiveBlending}
           depthTest={false}
           depthWrite={false}
         />
@@ -898,10 +1172,14 @@ function CurvedShell() {
 
 export function HudPanelMeshes({
   dimmed = false,
+  selectedChallenge = null,
   snapshot,
+  viewMode = 'realtime',
 }: {
   dimmed?: boolean
+  selectedChallenge?: Challenge | null
   snapshot: CtfSnapshot
+  viewMode?: HudViewMode
 }) {
   return (
     <group>
@@ -912,7 +1190,9 @@ export function HudPanelMeshes({
           config={panel}
           dimmed={dimmed}
           index={index}
+          selectedChallenge={selectedChallenge}
           snapshot={snapshot}
+          viewMode={viewMode}
         />
       ))}
     </group>

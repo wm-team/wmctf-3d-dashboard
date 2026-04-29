@@ -222,22 +222,22 @@ export function FocusTerrainDetails({ activeCategory }: { activeCategory: Catego
 
       {node.focusTheme === 'chaos' && (
         <>
-          {Array.from({ length: 12 }, (_, index) => {
+          {Array.from({ length: 16 }, (_, index) => {
             const angle = index * 1.23
-            const radius = 0.22 + (index % 4) * 0.18
+            const radius = 0.18 + (index % 5) * 0.16
             return (
               <mesh
                 key={`misc-tile-${index}`}
                 position={[Math.cos(angle) * radius, 0.035 + (index % 3) * 0.02, Math.sin(angle) * radius]}
                 rotation={[0, angle + (index % 2) * 0.45, 0]}
               >
-                <boxGeometry args={[0.2 + (index % 3) * 0.05, 0.045, 0.16 + (index % 2) * 0.06]} />
-                <DetailMaterial color={index % 3 === 0 ? '#ffd21f' : color} opacity={0.28} />
+                <boxGeometry args={[0.18 + (index % 3) * 0.05, 0.045, 0.14 + (index % 2) * 0.06]} />
+                <DetailMaterial color={index % 4 === 0 ? '#ffd21f' : color} opacity={0.3} />
               </mesh>
             )
           })}
-          {Array.from({ length: 5 }, (_, index) => (
-            <mesh key={`misc-artifact-${index}`} position={[-0.56 + index * 0.28, 0.23 + (index % 2) * 0.06, 0.46 - index * 0.16]} rotation={[0.2 * index, index * 0.7, 0.3]}>
+          {Array.from({ length: 7 }, (_, index) => (
+            <mesh key={`misc-artifact-${index}`} position={[-0.68 + index * 0.22, 0.2 + (index % 2) * 0.05, 0.52 - index * 0.13]} rotation={[0.2 * index, index * 0.7, 0.3]}>
               <boxGeometry args={[0.09, 0.09, 0.09]} />
               <DetailMaterial color={index % 2 ? color : '#69f6ff'} opacity={0.32} />
             </mesh>
@@ -250,6 +250,28 @@ export function FocusTerrainDetails({ activeCategory }: { activeCategory: Catego
             <mesh key={`misc-clue-${index}`} position={[x, 0.11, z]} rotation={[0, rotation, 0]}>
               <boxGeometry args={[length, 0.02, 0.03]} />
               <DetailMaterial color={index === 1 ? '#ffd21f' : '#69f6ff'} opacity={0.38} />
+            </mesh>
+          ))}
+          {[
+            [-0.82, -0.58],
+            [-0.42, -0.18],
+            [0.02, -0.28],
+            [0.38, 0.1],
+            [0.72, 0.42],
+          ].map(([x, z], index) => (
+            <mesh key={`misc-clue-node-${index}`} position={[x, 0.145, z]}>
+              <cylinderGeometry args={[0.045, 0.045, 0.052, index % 2 ? 4 : 6]} />
+              <DetailMaterial color={index === 3 ? '#ffd21f' : color} opacity={0.5} />
+            </mesh>
+          ))}
+          {[
+            [-0.62, -0.38, 0.46, 0.72],
+            [-0.15, -0.23, 0.42, -0.24],
+            [0.48, 0.25, 0.36, 0.58],
+          ].map(([x, z, length, rotation], index) => (
+            <mesh key={`misc-fragment-link-${index}`} position={[x, 0.12, z]} rotation={[0, rotation, 0]}>
+              <boxGeometry args={[length, 0.018, 0.022]} />
+              <DetailMaterial color={index === 0 ? '#ffd21f' : '#69f6ff'} opacity={0.3} />
             </mesh>
           ))}
         </>
