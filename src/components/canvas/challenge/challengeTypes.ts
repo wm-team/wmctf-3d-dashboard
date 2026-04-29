@@ -4,6 +4,12 @@ export type ChallengeDifficulty = 'easy' | 'medium' | 'hard' | 'expert'
 
 export type ChallengeStatus = 'solved' | 'hot' | 'unsolved' | 'locked'
 
+export type BloodInfo = {
+  first?: string
+  second?: string
+  third?: string
+}
+
 export type ChallengeCategoryMeta = {
   accent: string
   key: ChallengeCategory
@@ -18,13 +24,24 @@ export type ChallengeDifficultyMeta = {
 }
 
 export type Challenge = {
+  bloods?: BloodInfo
   category: ChallengeCategory
   difficulty: ChallengeDifficulty
+  /** @deprecated Use bloods.first for display consistency */
   firstBloodTeam?: string
+  heat: number
   id: string
+  latestSolveTeam?: string
   points: number
+  solvedAt?: string
   solvedCount: number
   status: ChallengeStatus
   submitCount: number
   title: string
 }
+
+export type ChallengeViewMode =
+  | 'autoplay-overview'
+  | 'autoplay-focus'
+  | 'manual-category'
+  | 'manual-challenge'

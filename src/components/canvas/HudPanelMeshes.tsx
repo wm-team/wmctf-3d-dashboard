@@ -782,10 +782,16 @@ function drawChallengeDetailPanel(
     })
     ctx.fillStyle = 'rgba(203, 216, 221, 0.72)'
     setFont(ctx, 23, 800)
-    ctx.fillText('FIRST BLOOD', 72, height - 106)
+    ctx.fillText('1st / 2nd / 3rd BLOOD', 72, height - 154)
     ctx.fillStyle = '#ffd21f'
-    setFont(ctx, 31, 900)
-    ctx.fillText(selectedChallenge.firstBloodTeam ?? '尚未产生', 72, height - 62)
+    setFont(ctx, 26, 900)
+    const b = selectedChallenge.bloods
+    const fb = b?.first ?? selectedChallenge.firstBloodTeam ?? '—'
+    ctx.fillText(`${fb}`, 72, height - 118)
+    ctx.fillStyle = '#9bddff'
+    ctx.fillText(`${b?.second ?? '—'}`, 72, height - 86)
+    ctx.fillStyle = '#86c9d9'
+    ctx.fillText(`${b?.third ?? '—'}`, 72, height - 54)
   }
 
   ctx.fillStyle = 'rgba(155, 221, 255, 0.18)'

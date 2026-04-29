@@ -22,7 +22,7 @@ function setMonoFont(ctx: CanvasRenderingContext2D, size: number, weight = 700) 
 function drawCardTexture(challenge: Challenge | null) {
   const canvas = document.createElement('canvas')
   canvas.width = 860
-  canvas.height = 540
+  canvas.height = 620
   const ctx = canvas.getContext('2d')
   if (!ctx) return canvas
 
@@ -73,12 +73,14 @@ function drawCardTexture(challenge: Challenge | null) {
     ['难度', challenge.difficulty.toUpperCase()],
     ['分值', String(challenge.points)],
     ['已解 / 提交', `${challenge.solvedCount} / ${challenge.submitCount}`],
-    ['一血战队', challenge.firstBloodTeam ?? '尚未产生'],
+    ['一血战队', challenge.bloods?.first ?? challenge.firstBloodTeam ?? '尚未产生'],
+    ['二血战队', challenge.bloods?.second ?? '—'],
+    ['三血战队', challenge.bloods?.third ?? '—'],
     ['状态', challenge.status.toUpperCase()],
   ]
 
   rows.forEach(([label, value], index) => {
-    const y = 220 + index * 46
+    const y = 196 + index * 42
     ctx.fillStyle = 'rgba(201, 217, 224, 0.62)'
     setFont(ctx, 22, 800)
     ctx.fillText(label, 62, y)
@@ -89,26 +91,26 @@ function drawCardTexture(challenge: Challenge | null) {
 
   const solveRate = Math.round((challenge.solvedCount / Math.max(challenge.submitCount, 1)) * 100)
   ctx.fillStyle = 'rgba(255, 255, 255, 0.06)'
-  ctx.fillRect(58, 484, canvas.width - 116, 14)
+  ctx.fillRect(58, 564, canvas.width - 116, 14)
   ctx.fillStyle = accent
-  ctx.fillRect(58, 484, (canvas.width - 116) * (solveRate / 100), 14)
+  ctx.fillRect(58, 564, (canvas.width - 116) * (solveRate / 100), 14)
   ctx.fillStyle = 'rgba(220, 235, 242, 0.72)'
   setMonoFont(ctx, 18, 800)
-  ctx.fillText(`SOLVE RATIO ${solveRate}%`, 58, 470)
+  ctx.fillText(`SOLVE RATIO ${solveRate}%`, 58, 550)
   return canvas
 }
 
-export function ChallengeDetailCard({ selectedChallenge }: { selectedChallenge: Challenge | null }) {
+export function ChallengeDetailCard({ detailChallenge }: { detailChallenge: Challenge | null }) {
   const group = useRef<Group>(null)
   const material = useRef<MeshBasicMaterial>(null)
   const texture = useMemo(() => {
-    const nextTexture = new CanvasTexture(drawCardTexture(selectedChallenge))
+    const nextTexture = new CanvasTexture(drawCardTexture(detailChallenge))
     nextTexture.colorSpace = SRGBColorSpace
     nextTexture.minFilter = LinearFilter
     nextTexture.magFilter = LinearFilter
     nextTexture.needsUpdate = true
     return nextTexture
-  }, [selectedChallenge])
+  }, [detailChallenge])
 
   useEffect(() => () => texture.dispose(), [texture])
 
@@ -116,15 +118,15 @@ export function ChallengeDetailCard({ selectedChallenge }: { selectedChallenge: 
     if (!group.current) return
     group.current.position.y = 1.04 + Math.sin(state.clock.elapsedTime * 0.72) * 0.018
     group.current.rotation.y = -0.34 - state.pointer.x * 0.025
-    if (material.current) material.current.opacity += ((selectedChallenge ? 0.94 : 0.72) - material.current.opacity) * 0.08
+    if (material.current) material.current.opacity += ((detailChallenge ? 0.94 : 0.72) - material.current.opacity) * 0.08
   })
 
-  if (!selectedChallenge) return null
+  if (!detailChallenge) return null
 
   return (
     <group ref={group} position={[3.24, 1.04, 0.3]} rotation={[-0.1, -0.34, 0.03]}>
       <mesh renderOrder={40} raycast={() => undefined}>
-        <planeGeometry args={[2.1, 1.32]} />
+        <planeGeometry args={[2.1, 1.5]} />
         <meshBasicMaterial
           ref={material}
           map={texture}

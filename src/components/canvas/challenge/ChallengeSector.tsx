@@ -210,12 +210,14 @@ export function ChallengeSector({
   activeCategory,
   category,
   hoverCategory,
+  labelVerbose,
   onHoverCategory,
   onSelectCategory,
 }: {
   activeCategory: ChallengeCategory | null
   category: ChallengeCategory
   hoverCategory: ChallengeCategory | null
+  labelVerbose: boolean
   onHoverCategory: (category: ChallengeCategory | null) => void
   onSelectCategory: (category: ChallengeCategory) => void
 }) {
@@ -330,7 +332,7 @@ export function ChallengeSector({
       ))}
       <Text
         color={isDimmed ? 'rgba(210, 226, 234, 0.24)' : '#f4fbff'}
-        fontSize={0.17}
+        fontSize={labelVerbose && isActive ? 0.2 : 0.17}
         fontWeight={900}
         position={labelPosition}
         textAlign="center"
