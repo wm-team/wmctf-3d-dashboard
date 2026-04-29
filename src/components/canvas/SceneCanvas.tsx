@@ -8,14 +8,14 @@ import type { CtfSnapshot } from '@/types/ctf'
 function CameraParallax() {
   useFrame((state) => {
     const { camera, pointer } = state
-    const targetX = pointer.x * 0.36
-    const targetY = 3.85 + pointer.y * 0.18
-    const targetZ = 9.85 - pointer.y * 0.1
+    const targetX = pointer.x * 0.42
+    const targetY = 3.62 + pointer.y * 0.2
+    const targetZ = 9.48 - pointer.y * 0.12
 
     camera.position.x += (targetX - camera.position.x) * 0.055
     camera.position.y += (targetY - camera.position.y) * 0.055
     camera.position.z += (targetZ - camera.position.z) * 0.055
-    camera.lookAt(pointer.x * 0.42, 0.24 + pointer.y * 0.16, -0.16)
+    camera.lookAt(pointer.x * 0.46, 0.08 + pointer.y * 0.16, -0.08)
   })
 
   return null
@@ -30,7 +30,7 @@ export function SceneCanvas({ snapshot }: { snapshot: CtfSnapshot }) {
       resize={{ scroll: true, offsetSize: true, debounce: { scroll: 0, resize: 0 } }}
     >
       <fog attach="fog" args={['#05090c', 10, 32]} />
-      <PerspectiveCamera makeDefault position={[0, 3.85, 9.85]} fov={41} />
+      <PerspectiveCamera makeDefault position={[0, 3.62, 9.48]} fov={41} />
       <ambientLight intensity={0.3} />
       <pointLight position={[7, 7, 4]} intensity={1.7} color="#aee9ff" />
       <pointLight position={[-6, 4, 5]} intensity={1.15} color="#f6d252" />
@@ -46,8 +46,8 @@ export function SceneCanvas({ snapshot }: { snapshot: CtfSnapshot }) {
           speed={0.22}
         />
         <HudPanelMeshes snapshot={snapshot} />
-        <group scale={0.72} position={[0, -0.02, -0.08]}>
-          <DataCore />
+        <group scale={0.88} position={[0, 0.32, 0.08]} rotation={[0.48, 0, 0]}>
+          <DataCore snapshot={snapshot} />
         </group>
       </Suspense>
     </Canvas>

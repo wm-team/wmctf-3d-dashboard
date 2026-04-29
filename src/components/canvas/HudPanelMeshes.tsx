@@ -63,7 +63,7 @@ const panels: PanelConfig[] = [
     height: 1.72,
     arc: 0.32,
     texture: [860, 520],
-    position: [-3.98, -1.22, 1.32],
+    position: [-3.98, -1.48, 1.34],
     rotation: [-0.5, 0.43, 0.04],
   },
   {
@@ -73,7 +73,7 @@ const panels: PanelConfig[] = [
     height: 1.72,
     arc: 0.34,
     texture: [1360, 520],
-    position: [0, -1.27, 1.18],
+    position: [0, -1.54, 1.22],
     rotation: [-0.53, 0, 0],
   },
   {
@@ -83,7 +83,7 @@ const panels: PanelConfig[] = [
     height: 1.72,
     arc: 0.32,
     texture: [980, 520],
-    position: [3.98, -1.22, 1.32],
+    position: [3.98, -1.48, 1.34],
     rotation: [-0.5, -0.43, -0.04],
   },
 ]
@@ -152,12 +152,59 @@ function drawPanelBase(
     ctx.stroke()
   }
 
+  ctx.globalCompositeOperation = 'screen'
+  const sweep = ctx.createLinearGradient(0, height * 0.06, width, height * 0.92)
+  sweep.addColorStop(0, 'rgba(255, 255, 255, 0)')
+  sweep.addColorStop(0.44, 'rgba(155, 235, 255, 0.08)')
+  sweep.addColorStop(0.5, `${accent}22`)
+  sweep.addColorStop(0.58, 'rgba(255, 255, 255, 0.04)')
+  sweep.addColorStop(1, 'rgba(255, 255, 255, 0)')
+  ctx.fillStyle = sweep
+  ctx.fillRect(0, 0, width, height)
+
+  ctx.fillStyle = 'rgba(220, 250, 255, 0.045)'
+  for (let y = 3; y < height; y += 7) {
+    ctx.fillRect(0, y, width, 1)
+  }
+
+  ctx.strokeStyle = `${accent}2f`
+  ctx.lineWidth = 2
+  for (let x = -width * 0.2; x < width; x += 88) {
+    ctx.beginPath()
+    ctx.moveTo(x, height)
+    ctx.lineTo(x + width * 0.34, 0)
+    ctx.stroke()
+  }
+  ctx.globalCompositeOperation = 'source-over'
+
   ctx.restore()
 
   panelPath(ctx, width, height)
   ctx.strokeStyle = 'rgba(226, 242, 247, 0.42)'
   ctx.lineWidth = 2
   ctx.stroke()
+
+  ctx.save()
+  ctx.shadowColor = accent
+  ctx.shadowBlur = 18
+  ctx.strokeStyle = `${accent}dd`
+  ctx.lineWidth = 4
+  const bracket = Math.min(width, height) * 0.14
+  const inset = 16
+  ;[
+    [inset, inset, inset + bracket, inset, inset, inset + bracket],
+    [width - inset, inset, width - inset - bracket, inset, width - inset, inset + bracket],
+    [inset, height - inset, inset + bracket, height - inset, inset, height - inset - bracket],
+    [width - inset, height - inset, width - inset - bracket, height - inset, width - inset, height - inset - bracket],
+  ].forEach(([x1, y1, x2, y2, x3, y3]) => {
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x3, y3)
+    ctx.stroke()
+  })
+  ctx.restore()
 
   ctx.beginPath()
   ctx.moveTo(width * 0.08, 76)
@@ -742,14 +789,30 @@ function HudPanelMesh({
       </mesh>
       <mesh
         geometry={geometry}
+        renderOrder={21}
+        scale={[1.008, 1.012, 1]}
+        position={[0, 0, 0.012]}
+      >
+        <meshBasicMaterial
+          map={texture}
+          transparent
+          opacity={0.18}
+          side={DoubleSide}
+          blending={AdditiveBlending}
+          depthTest={false}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh
+        geometry={geometry}
         renderOrder={19}
-        scale={[1.018, 1.024, 1]}
-        position={[0, 0, -0.018]}
+        scale={[1.026, 1.034, 1]}
+        position={[0, 0, -0.028]}
       >
         <meshBasicMaterial
           color={config.accent}
           transparent
-          opacity={0.08}
+          opacity={0.1}
           side={DoubleSide}
           blending={AdditiveBlending}
           depthTest={false}
