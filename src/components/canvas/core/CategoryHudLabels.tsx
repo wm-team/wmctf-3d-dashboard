@@ -194,13 +194,13 @@ function CategoryHudLabel({
     group.current.rotation.z = pulse * 0.004
     group.current.rotation.y = -state.pointer.x * 0.035
     group.current.rotation.x = state.pointer.y * 0.022
-    group.current.scale.setScalar(active ? 1.12 : hovered ? 1.06 : 1)
+    group.current.scale.setScalar(active ? 0.9 : hovered ? 1.02 : activeCategory ? 0.82 : 1)
   })
 
   const selected = activeCategory === node.key
   const faded = Boolean(activeCategory) && !selected
-  const panelOpacity = faded ? 0.16 : selected ? 1 : hoverCategory === node.key ? 0.98 : 0.9
-  const lineOpacity = faded ? 0.06 : selected ? 0.5 : 0.28
+  const panelOpacity = faded ? 0.055 : selected ? 0.62 : hoverCategory === node.key ? 0.98 : 0.9
+  const lineOpacity = faded ? 0.025 : selected ? 0.22 : 0.28
 
   return (
     <>
@@ -251,7 +251,7 @@ function CategoryHudLabel({
           <meshBasicMaterial
             color={node.color}
             transparent
-            opacity={faded ? 0.02 : selected ? 0.16 : 0.07}
+            opacity={faded ? 0.01 : selected ? 0.08 : 0.07}
             blending={AdditiveBlending}
             depthTest={false}
             depthWrite={false}

@@ -147,10 +147,12 @@ const fragmentShader = `
     float h = vHeight + pulse;
 
     float band = abs(fract(h / uContourInterval) - 0.5);
-    float line = 1.0 - smoothstep(uContourWidth, uContourWidth + 0.018, band);
+    float aa = fwidth(band) * 1.6;
+    float line = 1.0 - smoothstep(uContourWidth, uContourWidth + aa, band);
 
     float majorBand = abs(fract(h / (uContourInterval * 4.0)) - 0.5);
-    float majorLine = 1.0 - smoothstep(uMajorWidth, uMajorWidth + 0.016, majorBand);
+    float majorAa = fwidth(majorBand) * 1.6;
+    float majorLine = 1.0 - smoothstep(uMajorWidth, uMajorWidth + majorAa, majorBand);
 
     float grid = (sin(vLocalPos.x * 15.0 + uTime * 0.28) * sin(vLocalPos.z * 15.0 - uTime * 0.18) + 1.0) * 0.5;
     float centerGlow = 1.0 - smoothstep(0.2, 2.45, radius);
@@ -158,13 +160,13 @@ const fragmentShader = `
     float breathe = 0.82 + sin(uTime * 0.72) * 0.08;
 
     vec3 color = mix(uDeep, uBase, edge);
-    color += uCyan * line * (0.62 + uFocusStrength * 0.18) * breathe;
-    color += uYellow * majorLine * (0.92 + uFocusStrength * 0.22);
+    color += uCyan * line * (0.48 + uFocusStrength * 0.08) * breathe;
+    color += uYellow * majorLine * (0.68 + uFocusStrength * 0.1);
     color += uCyan * grid * 0.025 * edge;
     color += uYellow * centerGlow * 0.16;
     color += uCyan * rimGlow * 0.16;
 
-    float alpha = (0.55 + line * 0.23 + majorLine * 0.34 + centerGlow * 0.08 + uFocusStrength * 0.08) * edge;
+    float alpha = (0.48 + line * 0.16 + majorLine * 0.22 + centerGlow * 0.06 + uFocusStrength * 0.02) * edge;
     gl_FragColor = vec4(color, alpha);
   }
 `
@@ -180,9 +182,9 @@ function useTerrainMaterial() {
         depthWrite: true,
         uniforms: {
           uTime: { value: 0 },
-          uContourInterval: { value: 0.072 },
-          uContourWidth: { value: 0.055 },
-          uMajorWidth: { value: 0.038 },
+          uContourInterval: { value: 0.096 },
+          uContourWidth: { value: 0.014 },
+          uMajorWidth: { value: 0.022 },
           uFocusStrength: { value: 0 },
           uBase: { value: new Color(COLORS.terrainBase) },
           uDeep: { value: new Color(COLORS.terrainDeep) },
@@ -210,6 +212,7 @@ export function TechTerrain({
         Array.from({ length: 4 }, (_, level) => ({
           color: level === 2 && (node.name === 'Web' || node.name === 'Pwn') ? COLORS.yellow : node.color,
           geometry: makeContourGeometry(node, level),
+          nodeKey: node.key,
           opacity: 0.2 - level * 0.025,
         })),
       ),
@@ -318,17 +321,21 @@ export function TechTerrain({
         />
       </mesh>
 
-      {contourGeometries.map(({ color, geometry, opacity }, index) => (
+      {contourGeometries.map(({ color, geometry, nodeKey, opacity }, index) => {
+        const selected = activeCategory === nodeKey
+        const nextOpacity = activeCategory ? (selected ? Math.min(opacity, 0.08) : 0.025) : opacity
+        return (
         <mesh key={`contour-${index}`} geometry={geometry}>
           <meshBasicMaterial
             color={color}
             transparent
-            opacity={opacity}
+            opacity={nextOpacity}
             blending={AdditiveBlending}
             depthWrite={false}
           />
         </mesh>
-      ))}
+        )
+      })}
     </group>
   )
 }

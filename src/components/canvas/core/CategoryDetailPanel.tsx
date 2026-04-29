@@ -6,19 +6,11 @@ import {
   LinearFilter,
   MeshBasicMaterial,
   SRGBColorSpace,
+  Vector3,
   type Group,
 } from 'three'
 import { challengeCatalog, type ChallengeItem } from './challengeCatalog'
-import { getCategoryNodeByKey, terrainHeight, type CategoryKey, type CategorySceneNode } from './coreSceneConfig'
-
-const panelOffsets: Record<CategoryKey, [number, number]> = {
-  web: [-0.86, 0.58],
-  pwn: [1.0, 0.58],
-  rev: [1.02, 0.56],
-  crypto: [1.08, 0.54],
-  misc: [1.08, 0.52],
-  forensics: [-0.68, 0.62],
-}
+import { getCategoryNodeByKey, type CategoryKey, type CategorySceneNode } from './coreSceneConfig'
 
 function setFont(ctx: CanvasRenderingContext2D, size: number, weight = 700) {
   ctx.font = `${weight} ${size}px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif`
@@ -49,8 +41,8 @@ function statusColor(status: ChallengeItem['status']) {
 }
 
 function makeDetailTexture(node: CategorySceneNode, challenges: ChallengeItem[]) {
-  const width = 900
-  const height = 620
+  const width = 1280
+  const height = 820
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -104,60 +96,60 @@ function makeDetailTexture(node: CategorySceneNode, challenges: ChallengeItem[])
   ctx.setLineDash([])
 
   ctx.fillStyle = node.accentColor
-  setMonoFont(ctx, 28, 900)
-  ctx.fillText('CATEGORY FOCUS', 54, 56)
+  setMonoFont(ctx, 34, 900)
+  ctx.fillText('CATEGORY FOCUS', 68, 72)
 
   ctx.fillStyle = '#f4fbff'
-  setFont(ctx, 56, 900)
-  ctx.fillText(node.name.toUpperCase(), 54, 122)
+  setFont(ctx, 72, 900)
+  ctx.fillText(node.name.toUpperCase(), 68, 154)
   ctx.fillStyle = 'rgba(224, 236, 242, 0.76)'
-  setFont(ctx, 28, 800)
-  ctx.fillText(`${node.label} / ${node.focusTheme.toUpperCase()} TERRAIN`, 54, 162)
+  setFont(ctx, 34, 800)
+  ctx.fillText(`${node.label} / ${node.name.toUpperCase()} / ${node.focusTheme.toUpperCase()} TERRAIN`, 68, 204)
 
   ctx.fillStyle = 'rgba(5, 11, 14, 0.72)'
-  ctx.fillRect(54, 198, width - 108, 56)
+  ctx.fillRect(68, 252, width - 136, 68)
   ctx.strokeStyle = `${node.accentColor}88`
-  ctx.strokeRect(54, 198, width - 108, 56)
+  ctx.strokeRect(68, 252, width - 136, 68)
   ctx.fillStyle = 'rgba(218, 230, 236, 0.7)'
-  setMonoFont(ctx, 22, 800)
-  ctx.fillText(`${String(challenges.length).padStart(2, '0')} CHALLENGES`, 78, 234)
+  setMonoFont(ctx, 28, 800)
+  ctx.fillText(`${String(challenges.length).padStart(2, '0')} CHALLENGES`, 96, 295)
   ctx.textAlign = 'right'
-  ctx.fillText('DIFFICULTY / POINTS / STATUS', width - 78, 234)
+  ctx.fillText('DIFFICULTY / POINTS / STATUS', width - 96, 295)
   ctx.textAlign = 'left'
 
   challenges.forEach((challenge, index) => {
-    const y = 304 + index * 70
+    const y = 396 + index * 86
     ctx.fillStyle = index % 2 === 0 ? 'rgba(255, 255, 255, 0.035)' : 'rgba(105, 246, 255, 0.035)'
-    ctx.fillRect(54, y - 42, width - 108, 58)
+    ctx.fillRect(68, y - 52, width - 136, 68)
     ctx.strokeStyle = 'rgba(226, 246, 255, 0.12)'
-    ctx.strokeRect(54, y - 42, width - 108, 58)
+    ctx.strokeRect(68, y - 52, width - 136, 68)
 
     ctx.fillStyle = statusColor(challenge.status)
     ctx.beginPath()
-    ctx.arc(84, y - 10, 9, 0, Math.PI * 2)
+    ctx.arc(106, y - 14, 11, 0, Math.PI * 2)
     ctx.fill()
     ctx.fillStyle = '#f4fbff'
-    setFont(ctx, 30, 900)
-    ctx.fillText(challenge.title, 112, y)
+    setFont(ctx, 38, 900)
+    ctx.fillText(challenge.title, 144, y)
 
     ctx.fillStyle = 'rgba(224, 236, 242, 0.74)'
-    setMonoFont(ctx, 24, 800)
+    setMonoFont(ctx, 30, 800)
     ctx.textAlign = 'right'
-    ctx.fillText(challenge.difficulty.toUpperCase(), width - 312, y)
+    ctx.fillText(challenge.difficulty.toUpperCase(), width - 430, y)
     ctx.fillStyle = '#fff2a6'
-    ctx.fillText(String(challenge.points), width - 180, y)
+    ctx.fillText(String(challenge.points), width - 260, y)
     ctx.fillStyle = statusColor(challenge.status)
-    ctx.fillText(challenge.status.toUpperCase(), width - 74, y)
+    ctx.fillText(challenge.status.toUpperCase(), width - 96, y)
     ctx.textAlign = 'left'
   })
 
   ctx.fillStyle = 'rgba(215, 230, 236, 0.62)'
-  setFont(ctx, 22, 700)
-  ctx.fillText('ESC / 点击空白返回总览', 54, height - 44)
+  setFont(ctx, 30, 700)
+  ctx.fillText('ESC / 点击空白返回总览', 68, height - 58)
   ctx.fillStyle = node.accentColor
-  setMonoFont(ctx, 22, 900)
+  setMonoFont(ctx, 30, 900)
   ctx.textAlign = 'right'
-  ctx.fillText('RETURN OVERVIEW', width - 54, height - 44)
+  ctx.fillText('RETURN OVERVIEW', width - 68, height - 58)
   ctx.textAlign = 'left'
 
   return canvas
@@ -175,6 +167,9 @@ export function CategoryDetailPanel({
   const glowMaterial = useRef<MeshBasicMaterial>(null)
   const buttonMaterial = useRef<MeshBasicMaterial>(null)
   const opacity = useRef(0)
+  const forward = useMemo(() => new Vector3(), [])
+  const right = useMemo(() => new Vector3(), [])
+  const up = useMemo(() => new Vector3(), [])
 
   const node = activeCategory ? getCategoryNodeByKey(activeCategory) : null
   const texture = useMemo(() => {
@@ -195,26 +190,29 @@ export function CategoryDetailPanel({
     if (glowMaterial.current) glowMaterial.current.opacity = opacity.current * 0.12
     if (buttonMaterial.current) buttonMaterial.current.opacity = opacity.current * 0.82
     if (!group.current || !node) return
-    group.current.position.y = terrainHeight(node.x, node.z) + 1.12 + opacity.current * 0.12
-    group.current.lookAt(state.camera.position)
+
+    state.camera.getWorldDirection(forward)
+    right.crossVectors(forward, state.camera.up).normalize()
+    up.copy(state.camera.up).normalize()
+    group.current.position
+      .copy(state.camera.position)
+      .add(forward.multiplyScalar(3.82))
+      .add(right.multiplyScalar(1.1))
+      .add(up.multiplyScalar(-0.1 + opacity.current * 0.03))
+    group.current.quaternion.copy(state.camera.quaternion)
   })
 
   if (!node || !texture) return null
 
-  const offset = panelOffsets[node.key]
-  const panelX = node.x + offset[0]
-  const panelZ = node.z + offset[1]
-
   return (
     <group
       ref={group}
-      position={[panelX, terrainHeight(node.x, node.z) + 1.12, panelZ]}
-      renderOrder={60}
+      renderOrder={100}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <mesh renderOrder={62}>
-        <planeGeometry args={[2.14, 1.48]} />
+      <mesh renderOrder={102}>
+        <planeGeometry args={[2.12, 1.36]} />
         <meshBasicMaterial
           ref={panelMaterial}
           map={texture}
@@ -224,8 +222,8 @@ export function CategoryDetailPanel({
           depthWrite={false}
         />
       </mesh>
-      <mesh position={[0, 0, -0.03]} renderOrder={61}>
-        <planeGeometry args={[2.3, 1.62]} />
+      <mesh position={[0, 0, -0.03]} renderOrder={101}>
+        <planeGeometry args={[2.3, 1.52]} />
         <meshBasicMaterial
           ref={glowMaterial}
           color={node.accentColor}
@@ -237,8 +235,8 @@ export function CategoryDetailPanel({
         />
       </mesh>
       <mesh
-        position={[0.7, -0.57, 0.026]}
-        renderOrder={63}
+        position={[0.69, -0.53, 0.026]}
+        renderOrder={103}
         onClick={(event) => {
           event.stopPropagation()
           onClearCategory()
@@ -251,7 +249,7 @@ export function CategoryDetailPanel({
           document.body.style.cursor = ''
         }}
       >
-        <planeGeometry args={[0.44, 0.16]} />
+        <planeGeometry args={[0.46, 0.15]} />
         <meshBasicMaterial
           ref={buttonMaterial}
           color={node.accentColor}

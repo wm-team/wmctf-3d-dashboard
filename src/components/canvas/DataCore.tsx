@@ -2,7 +2,6 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { Group } from 'three'
 import { CategoryBeacons } from '@/components/canvas/core/CategoryBeacons'
-import { CategoryDetailPanel } from '@/components/canvas/core/CategoryDetailPanel'
 import { CategoryHudLabels } from '@/components/canvas/core/CategoryHudLabels'
 import { FlowArcs } from '@/components/canvas/core/FlowArcs'
 import { FocusTerrainDetails } from '@/components/canvas/core/FocusTerrainDetails'
@@ -37,7 +36,6 @@ export function DataCore({
 
   return (
     <group
-      scale={1.03}
       onClick={() => {
         if (activeCategory) onClearCategory()
       }}
@@ -61,7 +59,6 @@ export function DataCore({
         onSelectCategory={onSelectCategory}
         snapshot={snapshot}
       />
-      <CategoryDetailPanel activeCategory={activeCategory} onClearCategory={onClearCategory} />
     </group>
   )
 }

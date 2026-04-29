@@ -47,7 +47,7 @@ function makeFlowArc([fromName, toName]: [CategoryKey, CategoryKey], index: numb
 function makeLocalArcs(activeCategory: CategoryKey | null) {
   if (!activeCategory) return []
   const node = getCategoryNodeByKey(activeCategory)
-  return Array.from({ length: 3 }, (_, index) => {
+  return Array.from({ length: 2 }, (_, index) => {
     const angle = index * 2.1 + node.phase
     const start = new Vector3(
       node.x + Math.cos(angle) * 0.78,
@@ -84,7 +84,8 @@ export function FlowArcs({ activeCategory }: { activeCategory: CategoryKey | nul
         const point = arc.curve.getPoint(u)
         mesh.position.copy(point)
         const material = mesh.material as MeshBasicMaterial
-        material.opacity = (related ? 0.52 : 0.05) + Math.sin(t * 3.2 + particleIndex) * (related ? 0.16 : 0.02)
+        material.opacity =
+          activeCategory && !related ? 0 : (related ? (activeCategory ? 0.34 : 0.5) : 0.02) + Math.sin(t * 3.2 + particleIndex) * 0.06
       }
     })
   })
@@ -107,13 +108,13 @@ export function FlowArcs({ activeCategory }: { activeCategory: CategoryKey | nul
               transparent
               opacity={
                 activeCategory && !arc.key.includes(activeCategory)
-                  ? 0.045
+                  ? 0.02
                   : arc.color === COLORS.yellow
                     ? activeCategory
-                      ? 0.58
+                      ? 0.32
                       : 0.36
                     : activeCategory
-                      ? 0.44
+                      ? 0.26
                       : 0.28
               }
               blending={AdditiveBlending}
@@ -144,7 +145,7 @@ export function FlowArcs({ activeCategory }: { activeCategory: CategoryKey | nul
           <meshBasicMaterial
             color={activeCategory ? getCategoryNodeByKey(activeCategory).accentColor : COLORS.cyan}
             transparent
-            opacity={activeCategory ? 0.4 : 0}
+            opacity={activeCategory ? 0.24 : 0}
             blending={AdditiveBlending}
             depthWrite={false}
           />

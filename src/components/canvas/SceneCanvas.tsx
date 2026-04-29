@@ -1,14 +1,17 @@
 import { Canvas } from '@react-three/fiber'
 import { PerspectiveCamera, Stars } from '@react-three/drei'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { DataCore } from '@/components/canvas/DataCore'
 import { CameraRig } from '@/components/canvas/core/CameraRig'
+import { CategoryDetailPanel } from '@/components/canvas/core/CategoryDetailPanel'
 import { HudPanelMeshes } from '@/components/canvas/HudPanelMeshes'
 import type { CtfSnapshot } from '@/types/ctf'
 import type { CategoryKey } from '@/components/canvas/core/coreSceneConfig'
+import type { Group } from 'three'
 
 export function SceneCanvas({ snapshot }: { snapshot: CtfSnapshot }) {
   const [activeCategory, setActiveCategory] = useState<CategoryKey | null>(null)
+  const dataCoreGroup = useRef<Group>(null)
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -32,7 +35,7 @@ export function SceneCanvas({ snapshot }: { snapshot: CtfSnapshot }) {
       <pointLight position={[7, 7, 4]} intensity={1.7} color="#aee9ff" />
       <pointLight position={[-6, 4, 5]} intensity={1.15} color="#f6d252" />
       <pointLight position={[0, 2, 0]} intensity={1.45} color="#fff4a6" />
-      <CameraRig activeCategory={activeCategory} />
+      <CameraRig activeCategory={activeCategory} dataCoreGroup={dataCoreGroup} />
       <Suspense fallback={null}>
         <Stars
           radius={90}
@@ -43,7 +46,7 @@ export function SceneCanvas({ snapshot }: { snapshot: CtfSnapshot }) {
           speed={0.22}
         />
         <HudPanelMeshes snapshot={snapshot} dimmed={Boolean(activeCategory)} />
-        <group scale={0.96} position={[0, 0.28, 0.02]} rotation={[0.53, 0, 0]}>
+        <group ref={dataCoreGroup} scale={0.96} position={[0, 0.28, 0.02]} rotation={[0.53, 0, 0]}>
           <DataCore
             activeCategory={activeCategory}
             onClearCategory={() => setActiveCategory(null)}
@@ -51,6 +54,10 @@ export function SceneCanvas({ snapshot }: { snapshot: CtfSnapshot }) {
             snapshot={snapshot}
           />
         </group>
+        <CategoryDetailPanel
+          activeCategory={activeCategory}
+          onClearCategory={() => setActiveCategory(null)}
+        />
       </Suspense>
     </Canvas>
   )

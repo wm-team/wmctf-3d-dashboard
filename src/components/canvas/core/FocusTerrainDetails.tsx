@@ -17,16 +17,34 @@ function applyGroupOpacity(group: Group, opacity: number) {
   })
 }
 
+function DetailMaterial({
+  color,
+  opacity,
+}: {
+  color: string
+  opacity: number
+}) {
+  return (
+    <meshBasicMaterial
+      color={color}
+      transparent
+      opacity={opacity}
+      blending={AdditiveBlending}
+      depthWrite={false}
+    />
+  )
+}
+
 export function FocusTerrainDetails({ activeCategory }: { activeCategory: CategoryKey | null }) {
   const group = useRef<Group>(null)
   const opacity = useRef(0)
   const node = activeCategory ? getCategoryNodeByKey(activeCategory) : null
 
-  useFrame((_, delta) => {
-    opacity.current += ((node ? 1 : 0) - opacity.current) * 0.08
+  useFrame(() => {
+    opacity.current += ((node ? 1 : 0) - opacity.current) * 0.075
     if (!group.current || !node) return
-    group.current.position.set(node.x, terrainHeight(node.x, node.z) + 0.08, node.z)
-    group.current.rotation.y += delta * 0.08
+    group.current.position.set(node.x, terrainHeight(node.x, node.z) + 0.07, node.z)
+    group.current.scale.setScalar(0.9 + opacity.current * 0.1)
     applyGroupOpacity(group.current, opacity.current)
   })
 
@@ -35,33 +53,49 @@ export function FocusTerrainDetails({ activeCategory }: { activeCategory: Catego
   const color = node.accentColor
 
   return (
-    <group ref={group} position={[node.x, terrainHeight(node.x, node.z) + 0.08, node.z]}>
+    <group ref={group} position={[node.x, terrainHeight(node.x, node.z) + 0.07, node.z]}>
       {node.focusTheme === 'gateway' && (
         <>
-          {[-0.48, 0, 0.48].map((offset) => (
-            <mesh key={`gate-lane-${offset}`} position={[offset, 0.035, 0]} rotation={[Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[0.12, 1.35]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={0.22}
-                side={DoubleSide}
-                blending={AdditiveBlending}
-                depthWrite={false}
-              />
+          {[
+            [-0.52, 0, 0.88, 0.06, 0.44],
+            [0.02, 0.03, 1.08, 0.07, 0.52],
+            [0.56, -0.02, 0.78, 0.055, 0.36],
+          ].map(([x, z, w, h, d], index) => (
+            <mesh key={`web-slab-${index}`} position={[x, h / 2, z]}>
+              <boxGeometry args={[w, h, d]} />
+              <DetailMaterial color={index === 1 ? '#ffd21f' : color} opacity={0.3} />
             </mesh>
           ))}
-          {[0.42, 0.72, 1.02].map((radius) => (
-            <mesh key={`gate-ring-${radius}`} rotation={[Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[radius, radius + 0.018, 4, 1]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={0.24}
-                side={DoubleSide}
-                blending={AdditiveBlending}
-                depthWrite={false}
-              />
+          {[
+            [-0.82, 0.06, 0, 0.58],
+            [-0.5, 0.06, Math.PI / 2, 0.36],
+            [-0.5, 0.38, 0, 0.68],
+            [0.08, 0.38, Math.PI / 2, 0.44],
+            [0.08, 0.82, 0, 0.72],
+          ].map(([x, z, rotation, length], index) => (
+            <mesh key={`web-route-${index}`} position={[x, 0.095, z]} rotation={[0, rotation, 0]}>
+              <boxGeometry args={[length, 0.024, 0.048]} />
+              <DetailMaterial color={index > 2 ? '#ffd21f' : color} opacity={0.42} />
+            </mesh>
+          ))}
+          {[-0.28, 0.28].map((x) => (
+            <mesh key={`web-gate-post-${x}`} position={[x, 0.28, 0.92]}>
+              <boxGeometry args={[0.08, 0.56, 0.08]} />
+              <DetailMaterial color="#ffd21f" opacity={0.48} />
+            </mesh>
+          ))}
+          <mesh position={[0, 0.58, 0.92]}>
+            <boxGeometry args={[0.7, 0.08, 0.08]} />
+            <DetailMaterial color="#ffd21f" opacity={0.5} />
+          </mesh>
+          <mesh position={[0.42, 0.24, 1.1]} rotation={[0, 0.18, 0]}>
+            <planeGeometry args={[0.12, 0.72]} />
+            <meshBasicMaterial color={color} transparent opacity={0.18} side={DoubleSide} blending={AdditiveBlending} depthWrite={false} />
+          </mesh>
+          {Array.from({ length: 7 }, (_, index) => (
+            <mesh key={`web-packet-${index}`} position={[-1.06 + index * 0.24, 0.13, 0.06 + index * 0.12]}>
+              <boxGeometry args={[0.055, 0.055, 0.055]} />
+              <DetailMaterial color={index % 3 === 0 ? '#ffd21f' : color} opacity={0.52} />
             </mesh>
           ))}
         </>
@@ -69,32 +103,39 @@ export function FocusTerrainDetails({ activeCategory }: { activeCategory: Catego
 
       {node.focusTheme === 'exploit' && (
         <>
-          {Array.from({ length: 7 }, (_, index) => {
-            const angle = -0.9 + index * 0.3
+          {[
+            [-0.56, -0.12, -0.62, 0.05, 0.045],
+            [-0.22, 0.02, -0.48, 0.045, -0.34],
+            [0.12, 0.14, -0.58, 0.04, -0.7],
+            [0.44, 0.02, -0.42, 0.038, -0.28],
+            [0.76, -0.1, -0.34, 0.036, -0.58],
+          ].map(([x, z, length, width, rotation], index) => (
+            <mesh key={`pwn-crack-${index}`} position={[x, 0.06, z]} rotation={[0, rotation, 0]}>
+              <boxGeometry args={[Math.abs(length), 0.026, width]} />
+              <DetailMaterial color="#ffd21f" opacity={0.56} />
+            </mesh>
+          ))}
+          <mesh position={[0.02, 0.018, -0.02]}>
+            <cylinderGeometry args={[0.42, 0.58, 0.035, 7]} />
+            <DetailMaterial color="#2b1408" opacity={0.64} />
+          </mesh>
+          <mesh position={[0.02, 0.055, -0.02]} rotation={[Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.34, 0.38, 7]} />
+            <meshBasicMaterial color="#ffd21f" transparent opacity={0.28} side={DoubleSide} blending={AdditiveBlending} depthWrite={false} />
+          </mesh>
+          {Array.from({ length: 6 }, (_, index) => {
+            const angle = -0.6 + index * 0.28
             return (
-              <mesh key={`crack-${index}`} position={[Math.cos(angle) * 0.34, 0.04, Math.sin(angle) * 0.34]} rotation={[0, angle, 0]}>
-                <boxGeometry args={[0.72 - index * 0.045, 0.018, 0.032]} />
-                <meshBasicMaterial
-                  color={color}
-                  transparent
-                  opacity={0.34}
-                  blending={AdditiveBlending}
-                  depthWrite={false}
-                />
+              <mesh key={`pwn-shard-${index}`} position={[Math.cos(angle) * 0.52, 0.15, Math.sin(angle) * 0.44]} rotation={[0.22, angle, -0.18]}>
+                <boxGeometry args={[0.07, 0.24, 0.04]} />
+                <DetailMaterial color={index % 2 ? color : '#ffd21f'} opacity={0.38} />
               </mesh>
             )
           })}
-          {[0.34, 0.72, 1.08].map((radius) => (
-            <mesh key={`blast-${radius}`} rotation={[Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[radius, radius + 0.02, 96]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={0.22}
-                side={DoubleSide}
-                blending={AdditiveBlending}
-                depthWrite={false}
-              />
+          {Array.from({ length: 5 }, (_, index) => (
+            <mesh key={`pwn-memory-${index}`} position={[-0.72 + index * 0.18, 0.08 + index * 0.012, 0.62]}>
+              <boxGeometry args={[0.14, 0.1, 0.24]} />
+              <DetailMaterial color={index === 2 ? '#ffd21f' : color} opacity={0.34} />
             </mesh>
           ))}
         </>
@@ -102,117 +143,144 @@ export function FocusTerrainDetails({ activeCategory }: { activeCategory: Catego
 
       {node.focusTheme === 'reverse' && (
         <>
-          {Array.from({ length: 9 }, (_, index) => {
-            const angle = index * 0.7
-            const radius = 0.2 + index * 0.085
-            return (
-              <mesh key={`cfg-${index}`} position={[Math.cos(angle) * radius, 0.06 + index * 0.005, Math.sin(angle) * radius]}>
-                <sphereGeometry args={[0.04, 10, 10]} />
-                <meshBasicMaterial
-                  color={index % 3 === 0 ? '#ffd21f' : color}
-                  transparent
-                  opacity={0.58}
-                  blending={AdditiveBlending}
-                  depthWrite={false}
-                />
-              </mesh>
-            )
-          })}
-          {[0.36, 0.62, 0.88].map((radius) => (
-            <mesh key={`reverse-loop-${radius}`} rotation={[Math.PI / 2, 0, radius]}>
-              <torusGeometry args={[radius, 0.008, 8, 96, Math.PI * 1.35]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={0.26}
-                blending={AdditiveBlending}
-                depthWrite={false}
-              />
+          {[
+            [-0.62, 0.42],
+            [-0.22, 0.62],
+            [0.28, 0.46],
+            [0.62, 0.12],
+            [0.22, -0.16],
+            [-0.28, -0.38],
+            [-0.7, -0.18],
+          ].map(([x, z], index) => (
+            <mesh key={`rev-node-${index}`} position={[x, 0.1, z]}>
+              <cylinderGeometry args={[0.075, 0.075, 0.06, index % 3 === 0 ? 4 : 8]} />
+              <DetailMaterial color={index % 3 === 0 ? '#ffd21f' : color} opacity={0.54} />
             </mesh>
           ))}
+          {[
+            [-0.42, 0.52, 0.44, 0.46],
+            [0.04, 0.54, 0.52, -0.32],
+            [0.45, 0.28, 0.5, -0.82],
+            [0, -0.27, 0.56, 0.42],
+            [-0.5, -0.28, 0.5, -0.62],
+          ].map(([x, z, length, rotation], index) => (
+            <mesh key={`rev-edge-${index}`} position={[x, 0.09, z]} rotation={[0, rotation, 0]}>
+              <boxGeometry args={[length, 0.025, 0.032]} />
+              <DetailMaterial color={color} opacity={0.36} />
+            </mesh>
+          ))}
+          {[-0.48, 0.36].map((x, index) => (
+            <mesh key={`rev-breakpoint-${index}`} position={[x, 0.17, index ? -0.36 : 0.56]}>
+              <boxGeometry args={[0.12, 0.12, 0.035]} />
+              <DetailMaterial color="#ffd21f" opacity={0.58} />
+            </mesh>
+          ))}
+          <mesh position={[0.08, 0.08, 0]} rotation={[Math.PI / 2, 0, -0.5]}>
+            <torusGeometry args={[0.56, 0.008, 6, 80, Math.PI * 1.2]} />
+            <DetailMaterial color={color} opacity={0.28} />
+          </mesh>
         </>
       )}
 
       {node.focusTheme === 'cipher' && (
         <>
-          {[0.34, 0.52, 0.7, 0.88, 1.06].map((radius, index) => (
-            <mesh key={`cipher-ring-${radius}`} rotation={[Math.PI / 2, 0, index * 0.2]}>
-              <ringGeometry args={[radius, radius + 0.012, 128, 1, index * 0.24, Math.PI * (index % 2 ? 1.55 : 1.86)]} />
-              <meshBasicMaterial
-                color={index % 2 === 0 ? color : '#f4f8ff'}
-                transparent
-                opacity={0.24}
-                side={DoubleSide}
-                blending={AdditiveBlending}
-                depthWrite={false}
-              />
+          <mesh position={[0, 0.16, 0]} rotation={[0.5, 0.2, 0.7]}>
+            <octahedronGeometry args={[0.16, 0]} />
+            <DetailMaterial color={color} opacity={0.64} />
+          </mesh>
+          {[0.34, 0.56, 0.8].map((radius, index) => (
+            <mesh key={`cipher-fine-ring-${radius}`} rotation={[Math.PI / 2, 0, index * 0.35]}>
+              <ringGeometry args={[radius, radius + 0.01, 96, 1, index * 0.35, Math.PI * (index === 1 ? 1.32 : 1.72)]} />
+              <meshBasicMaterial color={index === 1 ? '#f4f8ff' : color} transparent opacity={0.24} side={DoubleSide} blending={AdditiveBlending} depthWrite={false} />
             </mesh>
           ))}
-          {Array.from({ length: 16 }, (_, index) => {
-            const angle = (index / 16) * Math.PI * 2
+          {Array.from({ length: 18 }, (_, index) => {
+            const angle = (index / 18) * Math.PI * 2
             return (
-              <mesh key={`cipher-tick-${index}`} position={[Math.cos(angle) * 0.96, 0.055, Math.sin(angle) * 0.96]} rotation={[0, -angle, 0]}>
-                <boxGeometry args={[0.12, 0.012, 0.018]} />
-                <meshBasicMaterial color={color} transparent opacity={0.26} blending={AdditiveBlending} depthWrite={false} />
+              <mesh key={`cipher-tick-${index}`} position={[Math.cos(angle) * 0.92, 0.08, Math.sin(angle) * 0.92]} rotation={[0, -angle, 0]}>
+                <boxGeometry args={[0.12, 0.016, 0.022]} />
+                <DetailMaterial color={index % 3 === 0 ? '#f4f8ff' : color} opacity={0.36} />
               </mesh>
             )
           })}
+          {Array.from({ length: 5 }, (_, row) =>
+            Array.from({ length: 5 }, (_, col) => (
+              <mesh key={`cipher-lattice-${row}-${col}`} position={[-0.48 + col * 0.12, 0.055, 0.42 + row * 0.1]}>
+                <boxGeometry args={[0.055, 0.025, 0.055]} />
+                <DetailMaterial color={(row + col) % 2 ? color : '#f4f8ff'} opacity={0.28} />
+              </mesh>
+            )),
+          )}
+          {[-0.62, 0.64].map((x, index) => (
+            <mesh key={`cipher-fragment-${index}`} position={[x, 0.18, index ? -0.42 : 0.28]} rotation={[0.1, index * 0.9, 0.5]}>
+              <boxGeometry args={[0.18, 0.035, 0.07]} />
+              <DetailMaterial color="#ffd21f" opacity={0.28} />
+            </mesh>
+          ))}
         </>
       )}
 
       {node.focusTheme === 'chaos' && (
         <>
-          {Array.from({ length: 14 }, (_, index) => {
-            const angle = index * 1.7
-            const radius = 0.22 + (index % 5) * 0.18
+          {Array.from({ length: 12 }, (_, index) => {
+            const angle = index * 1.23
+            const radius = 0.22 + (index % 4) * 0.18
             return (
               <mesh
-                key={`fragment-${index}`}
-                position={[Math.cos(angle) * radius, 0.12 + (index % 4) * 0.045, Math.sin(angle) * radius]}
-                rotation={[index * 0.2, angle, index * 0.13]}
+                key={`misc-tile-${index}`}
+                position={[Math.cos(angle) * radius, 0.035 + (index % 3) * 0.02, Math.sin(angle) * radius]}
+                rotation={[0, angle + (index % 2) * 0.45, 0]}
               >
-                <boxGeometry args={[0.12 + (index % 3) * 0.035, 0.04, 0.1]} />
-                <meshBasicMaterial
-                  color={index % 2 === 0 ? color : '#69f6ff'}
-                  transparent
-                  opacity={0.32}
-                  blending={AdditiveBlending}
-                  depthWrite={false}
-                />
+                <boxGeometry args={[0.2 + (index % 3) * 0.05, 0.045, 0.16 + (index % 2) * 0.06]} />
+                <DetailMaterial color={index % 3 === 0 ? '#ffd21f' : color} opacity={0.28} />
               </mesh>
             )
           })}
+          {Array.from({ length: 5 }, (_, index) => (
+            <mesh key={`misc-artifact-${index}`} position={[-0.56 + index * 0.28, 0.23 + (index % 2) * 0.06, 0.46 - index * 0.16]} rotation={[0.2 * index, index * 0.7, 0.3]}>
+              <boxGeometry args={[0.09, 0.09, 0.09]} />
+              <DetailMaterial color={index % 2 ? color : '#69f6ff'} opacity={0.32} />
+            </mesh>
+          ))}
+          {[
+            [-0.72, -0.4, 0.46, 0.32],
+            [-0.25, -0.12, 0.58, -0.18],
+            [0.28, 0.04, 0.5, 0.72],
+          ].map(([x, z, length, rotation], index) => (
+            <mesh key={`misc-clue-${index}`} position={[x, 0.11, z]} rotation={[0, rotation, 0]}>
+              <boxGeometry args={[length, 0.02, 0.03]} />
+              <DetailMaterial color={index === 1 ? '#ffd21f' : '#69f6ff'} opacity={0.38} />
+            </mesh>
+          ))}
         </>
       )}
 
       {node.focusTheme === 'forensic' && (
         <>
-          {[-0.5, -0.25, 0, 0.25, 0.5].map((offset) => (
-            <mesh key={`slice-${offset}`} position={[0, 0.06, offset]} rotation={[Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[1.42, 0.035]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={0.25}
-                side={DoubleSide}
-                blending={AdditiveBlending}
-                depthWrite={false}
-              />
+          {[-0.48, -0.25, -0.02, 0.21, 0.44].map((z, index) => (
+            <mesh key={`forensic-slab-${index}`} position={[0, 0.035 + index * 0.012, z]}>
+              <boxGeometry args={[1.36 - index * 0.08, 0.035, 0.08]} />
+              <DetailMaterial color={index % 2 ? color : '#f4f8ff'} opacity={0.3} />
             </mesh>
           ))}
-          {[0.42, 0.76, 1.08].map((radius, index) => (
-            <mesh key={`forensic-scan-${radius}`} rotation={[Math.PI / 2, 0, index * 0.35]}>
-              <ringGeometry args={[radius, radius + 0.012, 128, 1, 0.1, Math.PI * 0.62]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={0.3}
-                side={DoubleSide}
-                blending={AdditiveBlending}
-                depthWrite={false}
-              />
+          <mesh position={[0, 0.1, 0.66]}>
+            <boxGeometry args={[1.44, 0.035, 0.045]} />
+            <DetailMaterial color={color} opacity={0.46} />
+          </mesh>
+          {[-0.52, -0.16, 0.2, 0.56].map((x, index) => (
+            <mesh key={`forensic-marker-${index}`} position={[x, 0.19, 0.66]}>
+              <cylinderGeometry args={[0.055, 0.055, 0.22, 6]} />
+              <DetailMaterial color={index === 2 ? '#ffd21f' : color} opacity={0.52} />
             </mesh>
           ))}
+          <mesh position={[0.18, 0.11, -0.12]} rotation={[Math.PI / 2, 0, -0.72]}>
+            <ringGeometry args={[0.18, 0.86, 96, 1, 0, Math.PI * 0.22]} />
+            <meshBasicMaterial color={color} transparent opacity={0.18} side={DoubleSide} blending={AdditiveBlending} depthWrite={false} />
+          </mesh>
+          <mesh position={[0.48, 0.14, -0.24]} rotation={[0, -0.2, 0]}>
+            <boxGeometry args={[0.035, 0.035, 0.82]} />
+            <DetailMaterial color="#ffd21f" opacity={0.34} />
+          </mesh>
         </>
       )}
     </group>

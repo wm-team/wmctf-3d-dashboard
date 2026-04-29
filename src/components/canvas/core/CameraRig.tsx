@@ -1,21 +1,24 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, type RefObject } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { PerspectiveCamera, Vector3 } from 'three'
-import { getCategoryNodeByKey, type CategoryKey } from './coreSceneConfig'
+import { PerspectiveCamera, Vector3, type Group } from 'three'
+import { getCategoryNodeByKey, terrainHeight, type CategoryKey } from './coreSceneConfig'
 
 const overviewPosition = new Vector3(0, 3.62, 9.48)
 const overviewLookAt = new Vector3(0, 0.08, -0.08)
 
-const focusOffsets: Record<CategoryKey, [number, number, number]> = {
-  web: [0.8, 2.25, 2.8],
-  pwn: [-0.2, 2.35, 2.9],
-  rev: [-0.7, 2.15, 2.65],
-  crypto: [-0.9, 2.2, 2.7],
-  misc: [0.1, 2.1, 2.6],
-  forensics: [0.75, 2.25, 2.75],
+function getFocusWorldPoint(activeCategory: CategoryKey, dataCoreGroup: RefObject<Group | null>) {
+  const node = getCategoryNodeByKey(activeCategory)
+  const localPoint = new Vector3(node.x, terrainHeight(node.x, node.z), node.z)
+  return dataCoreGroup.current ? dataCoreGroup.current.localToWorld(localPoint.clone()) : localPoint
 }
 
-export function CameraRig({ activeCategory }: { activeCategory: CategoryKey | null }) {
+export function CameraRig({
+  activeCategory,
+  dataCoreGroup,
+}: {
+  activeCategory: CategoryKey | null
+  dataCoreGroup: RefObject<Group | null>
+}) {
   const lookAt = useRef(new Vector3(0, 0.08, -0.08))
   const targetPosition = useMemo(() => new Vector3(), [])
   const targetLookAt = useMemo(() => new Vector3(), [])
@@ -25,15 +28,11 @@ export function CameraRig({ activeCategory }: { activeCategory: CategoryKey | nu
     const { pointer } = state
 
     if (activeCategory) {
-      const node = getCategoryNodeByKey(activeCategory)
-      const offset = focusOffsets[activeCategory]
-      targetPosition.set(
-        node.x + offset[0] + pointer.x * 0.06,
-        offset[1] + pointer.y * 0.04,
-        node.z + offset[2],
-      )
-      targetLookAt.set(node.x + pointer.x * 0.025, 0.36 + pointer.y * 0.02, node.z - 0.04)
-      camera.fov += (35.5 - camera.fov) * 0.07
+      const focusWorld = getFocusWorldPoint(activeCategory, dataCoreGroup)
+      const side = activeCategory === 'web' || activeCategory === 'forensics' ? -1 : 1
+      targetPosition.copy(focusWorld).add(new Vector3(side * 1.05 + pointer.x * 0.05, 2.72 + pointer.y * 0.04, 5.05))
+      targetLookAt.copy(focusWorld).add(new Vector3(side * 0.18 + pointer.x * 0.02, 0.38 + pointer.y * 0.02, -0.28))
+      camera.fov += (39 - camera.fov) * 0.065
     } else {
       targetPosition.set(
         overviewPosition.x + pointer.x * 0.42,
@@ -44,8 +43,8 @@ export function CameraRig({ activeCategory }: { activeCategory: CategoryKey | nu
       camera.fov += (41 - camera.fov) * 0.07
     }
 
-    camera.position.lerp(targetPosition, activeCategory ? 0.075 : 0.055)
-    lookAt.current.lerp(targetLookAt, activeCategory ? 0.085 : 0.065)
+    camera.position.lerp(targetPosition, activeCategory ? 0.062 : 0.055)
+    lookAt.current.lerp(targetLookAt, activeCategory ? 0.07 : 0.065)
     camera.lookAt(lookAt.current)
     camera.updateProjectionMatrix()
   })
