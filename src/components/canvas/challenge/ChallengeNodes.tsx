@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import {
   AdditiveBlending,
@@ -11,8 +11,9 @@ import {
   MeshStandardMaterial,
   type Group,
 } from 'three'
-import { challengeCategories, getChallengePosition, getCategoryMeta } from './challengeData'
-import type { Challenge, ChallengeCategory, ChallengeStatus } from './challengeTypes'
+import { challengeCategories, firstBloodName, getChallengePosition, getCategoryMeta } from './challengeData'
+import { ChallengeNodeBillboard, ChallengeSolveFx } from './ChallengeNodeBillboard'
+import type { Challenge, ChallengeCategory, ChallengeStatus, ChallengeViewMode } from './challengeTypes'
 
 function statusColor(status: ChallengeStatus) {
   if (status === 'solved') return '#69f6ff'
@@ -124,47 +125,96 @@ function NetworkPinLine({
 
 function ChallengeNode({
   activeCategory,
+  autoplayFocusId,
   challenge,
+  categoryLabelsVerbose,
   isSelected,
+  onHoverChallenge,
   onSelectChallenge,
   position,
+  viewMode,
 }: {
   activeCategory: ChallengeCategory | null
+  autoplayFocusId: string | null
   challenge: Challenge
+  categoryLabelsVerbose: boolean
   isSelected: boolean
+  onHoverChallenge: (id: string | null) => void
   onSelectChallenge: (challenge: Challenge) => void
   position: readonly [number, number, number]
+  viewMode: ChallengeViewMode
 }) {
   const group = useRef<Group>(null)
   const coreMaterial = useRef<MeshStandardMaterial>(null)
   const pulseMaterial = useRef<MeshBasicMaterial>(null)
   const haloMaterial = useRef<MeshBasicMaterial>(null)
+  const scanRing = useRef<MeshBasicMaterial>(null)
+  const [hovered, setHovered] = useState(false)
+  const [solveFx, setSolveFx] = useState(0)
+  const prevStatus = useRef(challenge.status)
+
   const isLocked = challenge.status === 'locked'
   const isHot = challenge.status === 'hot'
+  const isSolved = challenge.status === 'solved'
+  const isFirstBlood = Boolean(firstBloodName(challenge))
   const isDimmed = Boolean(activeCategory && activeCategory !== challenge.category)
   const color = statusColor(challenge.status)
   const size = 0.16 + Math.min(challenge.points / 800, 0.72) * 0.09
   const moduleHeight = 0.1 + Math.min(challenge.points / 900, 0.7) * 0.08
   const categoryAccent = getCategoryMeta(challenge.category).accent
 
+  const showBillboard =
+    !isLocked &&
+    (hovered ||
+      isSelected ||
+      (autoplayFocusId === challenge.id && (viewMode === 'autoplay-focus' || viewMode === 'manual-challenge')))
+
+  useEffect(() => {
+    if (prevStatus.current === 'unsolved' && challenge.status === 'solved') {
+      setSolveFx((n) => n + 1)
+    }
+    prevStatus.current = challenge.status
+  }, [challenge.status])
+
   useFrame((state) => {
     const target = group.current
     if (!target) return
     const pulse = Math.sin(state.clock.elapsedTime * (isHot ? 4.1 : 2.2) + position[0]) * 0.5 + 0.5
     const selectedBoost = isSelected ? 1.22 : 1
+    const labelBoost = categoryLabelsVerbose && activeCategory === challenge.category ? 1.06 : 1
     const focusBoost = activeCategory === challenge.category ? 1.08 : 1
-    target.position.y = position[1] + (isHot ? pulse * 0.018 : 0) + (isSelected ? 0.04 : 0)
-    target.scale.setScalar(selectedBoost * focusBoost * (isLocked ? 0.78 : 1))
+    const lift =
+      (isHot ? pulse * 0.018 : 0) +
+      (isSelected ? 0.055 : autoplayFocusId === challenge.id ? 0.035 : 0)
+    target.position.y = position[1] + lift
+    target.scale.setScalar(selectedBoost * focusBoost * labelBoost * (isLocked ? 0.72 : 1))
     if (coreMaterial.current) {
-      coreMaterial.current.opacity = isLocked ? 0.2 : isDimmed ? 0.24 : 0.84
-      coreMaterial.current.emissiveIntensity = isSelected ? 0.92 : isHot ? 0.46 + pulse * 0.24 : challenge.status === 'solved' ? 0.42 : 0.12
+      coreMaterial.current.opacity = isLocked ? 0.14 : isDimmed ? 0.22 : isSolved ? 0.96 : 0.82
+      coreMaterial.current.emissiveIntensity = isSelected
+        ? 0.95
+        : isHot
+          ? 0.46 + pulse * 0.28
+          : isSolved
+            ? 0.58
+            : 0.14
     }
     if (pulseMaterial.current) {
-      pulseMaterial.current.opacity = isDimmed ? 0.04 : isSelected ? 0.68 : isHot ? 0.24 + pulse * 0.24 : 0.12
-      target.rotation.y += 0.006
+      pulseMaterial.current.opacity = isDimmed
+        ? 0.04
+        : isSelected
+          ? 0.72
+          : isHot
+            ? 0.26 + pulse * 0.26
+            : isSolved
+              ? 0.38
+              : 0.14
+      target.rotation.y += isSelected ? 0.012 : 0.006
     }
     if (haloMaterial.current) {
-      haloMaterial.current.opacity = isDimmed ? 0.03 : isSelected ? 0.34 : isHot ? 0.18 + pulse * 0.16 : 0.08
+      haloMaterial.current.opacity = isDimmed ? 0.03 : isSelected ? 0.42 : isHot ? 0.2 + pulse * 0.18 : isSolved ? 0.28 : 0.1
+    }
+    if (scanRing.current) {
+      scanRing.current.opacity = isSelected ? 0.42 + pulse * 0.12 : 0
     }
   })
 
@@ -176,12 +226,21 @@ function ChallengeNode({
         event.stopPropagation()
         if (!isLocked) onSelectChallenge(challenge)
       }}
+      onPointerEnter={(event) => {
+        event.stopPropagation()
+        setHovered(true)
+        onHoverChallenge(challenge.id)
+      }}
+      onPointerLeave={() => {
+        setHovered(false)
+        onHoverChallenge(null)
+      }}
     >
       <mesh position={[0, moduleHeight * 0.5, 0]} renderOrder={12}>
         <cylinderGeometry args={[size, size * 1.08, moduleHeight, 6, 1]} />
         <meshStandardMaterial
           ref={coreMaterial}
-          color={isLocked ? '#26343a' : '#0b1c22'}
+          color={isLocked ? '#1a2329' : '#0b1c22'}
           emissive={color}
           emissiveIntensity={0.3}
           metalness={0.54}
@@ -195,11 +254,11 @@ function ChallengeNode({
         <meshStandardMaterial
           color={isLocked ? '#223139' : '#0e2a31'}
           emissive={color}
-          emissiveIntensity={isSelected ? 0.78 : isHot ? 0.52 : 0.24}
+          emissiveIntensity={isSelected ? 0.78 : isHot ? 0.52 : 0.28}
           metalness={0.58}
           roughness={0.3}
           transparent
-          opacity={isLocked ? 0.28 : isDimmed ? 0.28 : 0.9}
+          opacity={isLocked ? 0.22 : isDimmed ? 0.26 : 0.92}
         />
       </mesh>
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.018, 0]} renderOrder={11}>
@@ -224,12 +283,39 @@ function ChallengeNode({
           depthWrite={false}
         />
       </mesh>
-      {challenge.firstBloodTeam && (
-        <mesh position={[size * 0.7, moduleHeight + 0.11, -size * 0.42]} rotation={[0, 0, -0.16]} renderOrder={14}>
-          <coneGeometry args={[0.055, 0.14, 3]} />
-          <meshBasicMaterial color="#ffd21f" transparent opacity={isDimmed ? 0.24 : 0.9} />
+      {isSolved && (
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} renderOrder={9}>
+          <ringGeometry args={[size * 1.05, size * 1.25, 40]} />
+          <meshBasicMaterial color="#69f6ff" transparent opacity={0.35} blending={AdditiveBlending} depthWrite={false} />
         </mesh>
       )}
+      {isSelected && (
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.002, 0]} renderOrder={16}>
+          <ringGeometry args={[size * 1.35, size * 1.52, 48]} />
+          <meshBasicMaterial
+            ref={scanRing}
+            color={categoryAccent}
+            transparent
+            opacity={0}
+            blending={AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
+      {isHot && (
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} renderOrder={8}>
+          <ringGeometry args={[size * 1.4, size * 1.85, 40]} />
+          <meshBasicMaterial color="#ffd21f" transparent opacity={0.14} blending={AdditiveBlending} depthWrite={false} />
+        </mesh>
+      )}
+      {isFirstBlood && (isSolved || isHot) && (
+        <mesh position={[size * 0.7, moduleHeight + 0.12, -size * 0.42]} rotation={[0, 0, -0.16]} renderOrder={14}>
+          <coneGeometry args={[0.052, 0.13, 3]} />
+          <meshBasicMaterial color="#ffd21f" transparent opacity={isDimmed ? 0.22 : 0.92} />
+        </mesh>
+      )}
+      <ChallengeSolveFx accent={categoryAccent} playToken={solveFx} />
+      <ChallengeNodeBillboard accent={categoryAccent} challenge={challenge} visible={showBillboard} />
     </group>
   )
 }
@@ -315,14 +401,22 @@ function ChallengeNetwork({
 
 export function ChallengeNodes({
   activeCategory,
+  autoplayFocusId,
+  categoryLabelsVerbose,
   challenges,
+  onHoverChallenge,
   onSelectChallenge,
   selectedChallenge,
+  viewMode,
 }: {
   activeCategory: ChallengeCategory | null
+  autoplayFocusId: string | null
+  categoryLabelsVerbose: boolean
   challenges: Challenge[]
+  onHoverChallenge: (id: string | null) => void
   onSelectChallenge: (challenge: Challenge) => void
   selectedChallenge: Challenge | null
+  viewMode: ChallengeViewMode
 }) {
   const positions = useMemo(
     () => new Map(challenges.map((challenge) => [challenge.id, getChallengePosition(challenge, challenges)])),
@@ -336,10 +430,14 @@ export function ChallengeNodes({
         <ChallengeNode
           key={challenge.id}
           activeCategory={activeCategory}
+          autoplayFocusId={autoplayFocusId}
+          categoryLabelsVerbose={categoryLabelsVerbose}
           challenge={challenge}
           isSelected={selectedChallenge?.id === challenge.id}
+          onHoverChallenge={onHoverChallenge}
           onSelectChallenge={onSelectChallenge}
           position={positions.get(challenge.id) ?? [0, 0.18, 0]}
+          viewMode={viewMode}
         />
       ))}
     </group>

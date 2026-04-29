@@ -2,11 +2,15 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Text } from '@react-three/drei'
 import { AdditiveBlending, type Group } from 'three'
+import { challengeData } from './challengeData'
 
 export function ChallengeCore() {
   const ringA = useRef<Group>(null)
   const ringB = useRef<Group>(null)
   const scan = useRef<Group>(null)
+  const total = challengeData.length
+  const solved = challengeData.filter((c) => c.status === 'solved').length
+  const hot = challengeData.filter((c) => c.status === 'hot').length
 
   useFrame((state) => {
     const elapsed = state.clock.elapsedTime
@@ -92,6 +96,9 @@ export function ChallengeCore() {
         textAlign="center"
       >
         CHALLENGE CORE
+      </Text>
+      <Text color="rgba(180, 210, 220, 0.88)" fontSize={0.09} fontWeight={800} position={[0, 0.62, 0]} textAlign="center">
+        {`${total} TOTAL  ·  ${solved} SOLVED  ·  ${hot} HOT`}
       </Text>
     </group>
   )
