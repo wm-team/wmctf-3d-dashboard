@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { SceneCanvas } from '@/components/canvas/SceneCanvas'
+import { WmctfLogo } from '@/components/hud/WmctfLogo'
 import type { CtfSnapshot } from '@/types/ctf'
 
 type Props = {
@@ -39,10 +40,15 @@ export function CtfHud({ snapshot }: Props) {
     <div className="ctf-screen ctf-screen--immersive" ref={screenRef}>
       <header className="screen-header">
         <div className="screen-brand">
-          <h1>{snapshot.eventName}</h1>
-          <div className="screen-brand__sub">
-            <span>{snapshot.subtitle}</span>
-            <i aria-hidden />
+          <div className="screen-brand__identity">
+            <WmctfLogo />
+            <div className="screen-brand__copy">
+              <h1>{snapshot.eventName}</h1>
+              <div className="screen-brand__sub">
+                <span>{snapshot.subtitle}</span>
+                <i aria-hidden />
+              </div>
+            </div>
           </div>
         </div>
 

@@ -52,11 +52,15 @@ button {
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
     linear-gradient(0deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px),
-    radial-gradient(ellipse at 50% 48%, rgba(77, 118, 132, 0.34), transparent 42%),
+    radial-gradient(ellipse at 50% 48%, rgba(105, 246, 255, 0.16), transparent 28%),
+    radial-gradient(ellipse at 50% 46%, rgba(255, 210, 31, 0.07), transparent 34%),
+    radial-gradient(ellipse at 50% 48%, rgba(77, 118, 132, 0.3), transparent 44%),
     linear-gradient(180deg, #0b1115 0%, #05080b 52%, #030608 100%);
   background-size:
     72px 72px,
     72px 72px,
+    auto,
+    auto,
     auto,
     auto;
 }
@@ -115,6 +119,7 @@ button {
   width: 100%;
   height: 100%;
   display: block;
+  pointer-events: auto;
 }
 
 .ctf-screen {
@@ -152,6 +157,72 @@ button {
   text-shadow: 0 0 18px rgba(246, 210, 82, 0.12);
 }
 
+.screen-brand__identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.screen-brand__copy {
+  min-width: 0;
+}
+
+.screen-logo {
+  position: relative;
+  flex: 0 0 auto;
+  width: 126px;
+  height: 78px;
+  margin-top: -1px;
+  margin-left: -8px;
+  overflow: visible;
+  transform: translateY(8.5px);
+  filter:
+    drop-shadow(0 0 12px rgba(255, 255, 255, 0.26))
+    drop-shadow(0 0 28px rgba(246, 210, 82, 0.2));
+}
+
+.screen-logo::before,
+.screen-logo::after {
+  position: absolute;
+  left: 50%;
+  top: 70%;
+  z-index: 2;
+  content: '';
+  width: 82%;
+  height: 28%;
+  pointer-events: none;
+  border: 1px solid rgba(246, 210, 82, 0.48);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(246, 210, 82, 0.16), transparent 62%);
+  transform: translate(-50%, -50%) perspective(126px) rotateX(66deg);
+  transform-origin: center;
+}
+
+.screen-logo::before {
+  animation: logo-orbit 3.4s linear infinite;
+  box-shadow:
+    0 0 18px rgba(246, 210, 82, 0.42),
+    inset 0 0 18px rgba(255, 255, 255, 0.14);
+}
+
+.screen-logo::after {
+  top: 70%;
+  width: 58%;
+  height: 19%;
+  border-color: rgba(155, 221, 255, 0.36);
+  background: radial-gradient(ellipse at center, rgba(155, 221, 255, 0.14), transparent 64%);
+  animation: logo-orbit 2.2s linear infinite reverse;
+}
+
+.screen-logo canvas {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 .screen-brand__sub {
   display: flex;
   align-items: center;
@@ -169,6 +240,22 @@ button {
     rgba(255, 255, 255, 0.12) 0 4px,
     transparent 4px 9px
   );
+}
+
+@keyframes logo-orbit {
+  0% {
+    opacity: 0.42;
+    transform: translate(-50%, -50%) perspective(126px) rotateX(66deg) rotateZ(0deg);
+  }
+
+  50% {
+    opacity: 0.84;
+  }
+
+  100% {
+    opacity: 0.42;
+    transform: translate(-50%, -50%) perspective(126px) rotateX(66deg) rotateZ(360deg);
+  }
 }
 
 .screen-tabs {

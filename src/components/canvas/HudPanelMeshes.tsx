@@ -7,6 +7,7 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   LinearFilter,
+  MeshBasicMaterial,
   SRGBColorSpace,
   type Group,
 } from 'three'
@@ -748,14 +749,20 @@ function usePanelTexture(config: PanelConfig, snapshot: CtfSnapshot) {
 
 function HudPanelMesh({
   config,
+  dimmed,
   index,
   snapshot,
 }: {
   config: PanelConfig
+  dimmed: boolean
   index: number
   snapshot: CtfSnapshot
 }) {
   const group = useRef<Group>(null)
+  const mainMaterial = useRef<MeshBasicMaterial>(null)
+  const glowMaterial = useRef<MeshBasicMaterial>(null)
+  const backMaterial = useRef<MeshBasicMaterial>(null)
+  const opacity = useRef(1)
   const texture = usePanelTexture(config, snapshot)
   const geometry = useMemo(
     () => makeCurvedGeometry(config.width, config.height, config.arc),
@@ -765,20 +772,27 @@ function HudPanelMesh({
   useEffect(() => () => geometry.dispose(), [geometry])
 
   useFrame((state) => {
+    opacity.current += ((dimmed ? 0.12 : 1) - opacity.current) * 0.08
+    if (mainMaterial.current) mainMaterial.current.opacity = 0.94 * opacity.current
+    if (glowMaterial.current) glowMaterial.current.opacity = 0.18 * opacity.current
+    if (backMaterial.current) backMaterial.current.opacity = 0.1 * opacity.current
+
     const target = group.current
     if (!target) return
     const side = config.position[0] < -0.1 ? -1 : config.position[0] > 0.1 ? 1 : 0
     const float = Math.sin(state.clock.elapsedTime * 0.7 + index) * 0.018
     target.position.y = config.position[1] + float + state.pointer.y * 0.035
     target.position.x = config.position[0] + state.pointer.x * (0.05 + Math.abs(side) * 0.035)
+    target.position.z = config.position[2] - (dimmed ? 0.16 : 0)
     target.rotation.x = config.rotation[0] - state.pointer.y * 0.025
     target.rotation.y = config.rotation[1] - state.pointer.x * 0.035 + side * state.pointer.y * 0.012
   })
 
   return (
     <group ref={group} position={config.position} rotation={config.rotation}>
-      <mesh geometry={geometry} renderOrder={20}>
+      <mesh geometry={geometry} renderOrder={20} raycast={() => undefined}>
         <meshBasicMaterial
+          ref={mainMaterial}
           map={texture}
           transparent
           opacity={0.94}
@@ -792,8 +806,10 @@ function HudPanelMesh({
         renderOrder={21}
         scale={[1.008, 1.012, 1]}
         position={[0, 0, 0.012]}
+        raycast={() => undefined}
       >
         <meshBasicMaterial
+          ref={glowMaterial}
           map={texture}
           transparent
           opacity={0.18}
@@ -808,8 +824,10 @@ function HudPanelMesh({
         renderOrder={19}
         scale={[1.026, 1.034, 1]}
         position={[0, 0, -0.028]}
+        raycast={() => undefined}
       >
         <meshBasicMaterial
+          ref={backMaterial}
           color={config.accent}
           transparent
           opacity={0.1}
@@ -827,7 +845,12 @@ function CurvedShell() {
   return (
     <group position={[0, -0.55, 0.2]}>
       {[4.7, 5.25, 5.78].map((radius, index) => (
-        <mesh key={radius} rotation={[Math.PI / 2, 0, 0]} position={[0, -1.72 + index * 0.05, 0]}>
+        <mesh
+          key={radius}
+          rotation={[Math.PI / 2, 0, 0]}
+          position={[0, -1.72 + index * 0.05, 0]}
+          raycast={() => undefined}
+        >
           <torusGeometry args={[radius, 0.008 + index * 0.002, 8, 220]} />
           <meshBasicMaterial
             color={index === 1 ? '#ffd21f' : '#9bddff'}
@@ -873,7 +896,13 @@ function CurvedShell() {
   )
 }
 
-export function HudPanelMeshes({ snapshot }: { snapshot: CtfSnapshot }) {
+export function HudPanelMeshes({
+  dimmed = false,
+  snapshot,
+}: {
+  dimmed?: boolean
+  snapshot: CtfSnapshot
+}) {
   return (
     <group>
       <CurvedShell />
@@ -881,6 +910,7 @@ export function HudPanelMeshes({ snapshot }: { snapshot: CtfSnapshot }) {
         <HudPanelMesh
           key={panel.kind}
           config={panel}
+          dimmed={dimmed}
           index={index}
           snapshot={snapshot}
         />

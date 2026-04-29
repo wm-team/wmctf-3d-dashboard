@@ -1,7 +1,7 @@
 import type { CtfSnapshot } from '@/types/ctf'
 
 export const mockCtfState: CtfSnapshot = {
-  eventName: 'CTF 赛事可视化大屏',
+  eventName: 'WMCTF',
   subtitle: 'CAPTURE THE FLAG',
   phase: '实时态势',
   elapsedLabel: '02:29:36',
