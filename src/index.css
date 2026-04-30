@@ -2598,3 +2598,110 @@ button {
   position: relative;
   z-index: 2;
 }
+
+.challenge-debug-menu {
+  position: absolute;
+  top: 112px;
+  right: 34px;
+  z-index: 8;
+  width: 360px;
+  padding: 14px 14px 12px;
+  color: #eaf8ff;
+  pointer-events: auto;
+  border: 1px solid rgba(155, 221, 255, 0.28);
+  background:
+    linear-gradient(135deg, rgba(18, 36, 43, 0.88), rgba(3, 9, 12, 0.78)),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 9px);
+  box-shadow:
+    0 0 22px rgba(105, 246, 255, 0.11),
+    inset 0 0 28px rgba(105, 246, 255, 0.05);
+  backdrop-filter: blur(8px);
+}
+
+.challenge-debug-menu__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 900;
+  color: #9bddff;
+}
+
+.challenge-debug-menu__head > span {
+  flex: 0 0 auto;
+}
+
+.challenge-debug-menu__toggles {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.challenge-debug-menu__toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(234, 248, 255, 0.76);
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+.challenge-debug-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.challenge-debug-field {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: rgba(218, 234, 240, 0.78);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.challenge-debug-field input {
+  width: 100%;
+  accent-color: #ffd21f;
+}
+
+.challenge-debug-field strong {
+  color: #f4fbff;
+  font-family: var(--font-display);
+  font-size: 15px;
+  text-align: right;
+}
+
+.challenge-debug-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.challenge-debug-actions button {
+  flex: 1 0 calc(33.333% - 7px);
+  min-width: 86px;
+  height: 28px;
+  color: #f4fbff;
+  cursor: pointer;
+  border: 1px solid rgba(255, 210, 31, 0.4);
+  background: rgba(255, 210, 31, 0.12);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.challenge-debug-actions button:hover {
+  border-color: rgba(255, 210, 31, 0.78);
+  background: rgba(255, 210, 31, 0.2);
+}

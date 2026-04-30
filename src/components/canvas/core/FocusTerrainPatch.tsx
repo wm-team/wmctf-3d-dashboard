@@ -14,6 +14,7 @@ import {
   COLORS,
   getCategoryNodeByKey,
   terrainHeight,
+  type CategoryIntensityMap,
   type CategoryKey,
   type FocusTheme,
 } from './coreSceneConfig'
@@ -114,25 +115,47 @@ const fragmentShader = `
   uniform vec3 uBase;
   uniform vec3 uAccent;
   uniform float uProgress;
+  uniform float uTime;
+  uniform float uIntensity;
   varying float vFalloff;
   varying vec3 vPos;
 
   void main() {
-    float grid = (sin(vPos.x * 24.0) * sin(vPos.z * 24.0) + 1.0) * 0.5;
-    float micro = (sin(vPos.x * 38.0 + vPos.z * 4.0) * sin(vPos.z * 34.0 - vPos.x * 2.0) + 1.0) * 0.5;
-    float line = smoothstep(0.56, 0.96, grid) * 0.14 + smoothstep(0.76, 0.98, micro) * 0.05;
-    vec3 color = mix(vec3(0.025, 0.08, 0.09), uBase, 0.32 + vFalloff * 0.18);
-    color += uAccent * (line + vFalloff * 0.14);
-    gl_FragColor = vec4(color, vFalloff * uProgress * 0.7);
+    float grid = (sin(vPos.x * 23.0) * sin(vPos.z * 23.0) + 1.0) * 0.5;
+    float micro = (sin(vPos.x * 42.0 + vPos.z * 4.0) * sin(vPos.z * 38.0 - vPos.x * 2.0) + 1.0) * 0.5;
+    float contourBand = abs(fract((vPos.y + 0.012 * sin(vPos.x * 2.0 + uTime * 0.24)) / 0.046) - 0.5);
+    float contourAa = fwidth(contourBand) * 1.8;
+    float contour = 1.0 - smoothstep(0.075, 0.075 + contourAa, contourBand);
+    float majorBand = abs(fract((vPos.y + 0.018) / 0.184) - 0.5);
+    float majorAa = fwidth(majorBand) * 1.8;
+    float majorContour = 1.0 - smoothstep(0.082, 0.082 + majorAa, majorBand);
+    float radial = length(vPos.xz);
+    float reveal = smoothstep(1.7, 0.12, radial - uProgress * 1.9);
+    float scan = 1.0 - smoothstep(0.02, 0.16, abs(fract(radial * 0.68 - uTime * (0.22 + uIntensity * 0.12)) - 0.5));
+    float diagonal = smoothstep(0.82, 0.99, sin((vPos.x + vPos.z) * 18.0 - uTime * 2.1) * 0.5 + 0.5);
+    float line = smoothstep(0.58, 0.96, grid) * 0.12 + smoothstep(0.76, 0.98, micro) * 0.045;
+    vec3 color = mix(vec3(0.018, 0.055, 0.062), uBase, 0.28 + vFalloff * 0.2);
+    color += uAccent * (line + contour * (0.42 + uIntensity * 0.12) + majorContour * 0.7 + scan * 0.14 + diagonal * 0.045);
+    color += vec3(1.0, 0.86, 0.28) * majorContour * (0.16 + uIntensity * 0.12);
+    float alpha = vFalloff * uProgress * reveal * (0.48 + contour * 0.2 + majorContour * 0.18 + scan * 0.06);
+    gl_FragColor = vec4(color, alpha);
   }
 `
 
-export function FocusTerrainPatch({ activeCategory }: { activeCategory: CategoryKey | null }) {
+export function FocusTerrainPatch({
+  activeCategory,
+  categoryIntensity,
+}: {
+  activeCategory: CategoryKey | null
+  categoryIntensity?: CategoryIntensityMap
+}) {
   const group = useRef<Group>(null)
   const material = useRef<ShaderMaterial>(null)
   const uniforms = useMemo(
     () => ({
       uProgress: { value: 0 },
+      uTime: { value: 0 },
+      uIntensity: { value: 0.5 },
       uBase: { value: new Color(COLORS.terrainBase) },
       uAccent: { value: new Color(COLORS.cyan) },
     }),
@@ -141,13 +164,16 @@ export function FocusTerrainPatch({ activeCategory }: { activeCategory: Category
   const progress = useRef(0)
   const geometry = useMemo(() => (activeCategory ? makePatchGeometry(activeCategory) : null), [activeCategory])
   const node = activeCategory ? getCategoryNodeByKey(activeCategory) : null
+  const intensity = activeCategory ? categoryIntensity?.[activeCategory] ?? 0.5 : 0.5
 
   useEffect(() => () => geometry?.dispose(), [geometry])
 
-  useFrame(() => {
+  useFrame((state) => {
     progress.current += ((activeCategory ? 1 : 0) - progress.current) * 0.08
     if (material.current) {
       material.current.uniforms.uProgress.value = progress.current
+      material.current.uniforms.uTime.value = state.clock.elapsedTime
+      material.current.uniforms.uIntensity.value += (intensity - material.current.uniforms.uIntensity.value) * 0.08
       if (node) material.current.uniforms.uAccent.value.set(node.accentColor)
     }
     if (!group.current || !node) return
@@ -166,6 +192,7 @@ export function FocusTerrainPatch({ activeCategory }: { activeCategory: Category
             fragmentShader={fragmentShader}
             transparent
             side={DoubleSide}
+            blending={AdditiveBlending}
             depthWrite={false}
             uniforms={uniforms}
           />
@@ -175,14 +202,14 @@ export function FocusTerrainPatch({ activeCategory }: { activeCategory: Category
           <meshBasicMaterial
             color={node.accentColor}
             transparent
-            opacity={0.22}
+            opacity={0.16 + intensity * 0.12}
             side={DoubleSide}
             blending={AdditiveBlending}
             depthWrite={false}
           />
         </mesh>
       </group>
-      <FocusTerrainDetails activeCategory={activeCategory} />
+      <FocusTerrainDetails activeCategory={activeCategory} categoryIntensity={categoryIntensity} />
     </>
   )
 }

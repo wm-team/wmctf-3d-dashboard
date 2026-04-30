@@ -20,9 +20,11 @@ import {
   getCategoryNodeByKey,
   terrainHeight,
   terrainRadius,
+  type CategoryIntensityMap,
   type CategoryKey,
   type CategorySceneNode,
 } from './coreSceneConfig'
+import { realtimeVisualConfig } from './realtimeVisualConfig'
 
 function makeTerrainGeometry(activeCategory: CategoryKey | null) {
   const ringCount = 56
@@ -88,6 +90,17 @@ function makeFocusHeightAttribute(activeCategory: CategoryKey | null) {
   return new Float32BufferAttribute(heights, 1)
 }
 
+function makeFocusHeightAttributes() {
+  const attributes = new Map<CategoryKey | 'overview', Float32BufferAttribute>()
+  attributes.set('overview', makeFocusHeightAttribute(null))
+  categoryNodes.forEach((node) => attributes.set(node.key, makeFocusHeightAttribute(node.key)))
+  return attributes
+}
+
+function makeHotspotCenters() {
+  return categoryNodes.map((node) => new Vector2(node.x, node.z))
+}
+
 function makeContourGeometry(seed: CategorySceneNode, level: number) {
   const points: Vector3[] = []
   const radius = 0.3 + level * 0.16
@@ -140,6 +153,10 @@ const fragmentShader = `
   uniform vec3 uYellow;
   uniform float uFocusStrength;
   uniform vec2 uFocusCenter;
+  uniform vec2 uHotspotCenters[6];
+  uniform float uHotspotIntensity[6];
+  uniform float uScanOpacity;
+  uniform float uHotspotOpacity;
   varying float vHeight;
   varying vec3 vLocalPos;
 
@@ -165,6 +182,21 @@ const fragmentShader = `
     float focusMask = 1.0 - smoothstep(1.22, 3.18, focusDistance);
     float focusDim = mix(1.0, mix(0.16, 1.0, focusMask), uFocusStrength);
     float lineDim = mix(1.0, mix(0.18, 1.0, focusMask), uFocusStrength);
+    float scanRadius = mod(uTime * 0.42, 5.12);
+    float scanLine = (1.0 - smoothstep(0.0, 0.12, abs(radius - scanRadius))) * edge;
+    float hotspot = 0.0;
+    float hotspotRing = 0.0;
+
+    for (int index = 0; index < 6; index++) {
+      float distanceToHotspot = length(vLocalPos.xz - uHotspotCenters[index]);
+      float hotspotMask = 1.0 - smoothstep(0.18, 1.34, distanceToHotspot);
+      float wave = 1.0 - smoothstep(0.018, 0.068, abs(sin(distanceToHotspot * 10.0 - uTime * (1.1 + uHotspotIntensity[index] * 0.8))));
+      hotspot += hotspotMask * uHotspotIntensity[index];
+      hotspotRing += wave * hotspotMask * uHotspotIntensity[index];
+    }
+
+    hotspot = clamp(hotspot, 0.0, 1.45);
+    hotspotRing = clamp(hotspotRing, 0.0, 1.25);
 
     vec3 color = mix(uDeep, uBase, edge);
     color += uCyan * line * (0.48 + uFocusStrength * 0.08) * breathe * lineDim;
@@ -172,9 +204,20 @@ const fragmentShader = `
     color += uCyan * grid * 0.025 * edge * lineDim;
     color += uYellow * centerGlow * 0.16 * lineDim;
     color += uCyan * rimGlow * 0.16 * mix(1.0, 0.42, uFocusStrength);
+    color += uCyan * scanLine * uScanOpacity * mix(1.0, 0.52, uFocusStrength);
+    color += uCyan * hotspot * uHotspotOpacity * 0.2 * lineDim;
+    color += uYellow * hotspotRing * uHotspotOpacity * 0.42 * lineDim;
     color = mix(color * 0.34, color, focusDim);
 
-    float alpha = (0.48 + line * 0.16 * lineDim + majorLine * 0.22 * lineDim + centerGlow * 0.06 + uFocusStrength * 0.02) * edge * focusDim;
+    float alpha = (
+      0.48 +
+      line * 0.16 * lineDim +
+      majorLine * 0.22 * lineDim +
+      centerGlow * 0.06 +
+      scanLine * 0.045 +
+      hotspotRing * 0.035 +
+      uFocusStrength * 0.02
+    ) * edge * focusDim;
     gl_FragColor = vec4(color, alpha);
   }
 `
@@ -190,15 +233,19 @@ function useTerrainMaterial() {
         depthWrite: true,
         uniforms: {
           uTime: { value: 0 },
-          uContourInterval: { value: 0.096 },
-          uContourWidth: { value: 0.014 },
-          uMajorWidth: { value: 0.022 },
+          uContourInterval: { value: realtimeVisualConfig.terrain.contourInterval },
+          uContourWidth: { value: realtimeVisualConfig.terrain.contourWidth },
+          uMajorWidth: { value: realtimeVisualConfig.terrain.majorWidth },
           uFocusStrength: { value: 0 },
           uBase: { value: new Color(COLORS.terrainBase) },
           uDeep: { value: new Color(COLORS.terrainDeep) },
           uCyan: { value: new Color(COLORS.cyan) },
           uYellow: { value: new Color(COLORS.yellow) },
           uFocusCenter: { value: new Vector2(0, 0) },
+          uHotspotCenters: { value: makeHotspotCenters() },
+          uHotspotIntensity: { value: categoryNodes.map(() => 0.35) },
+          uScanOpacity: { value: realtimeVisualConfig.terrain.scanOpacity },
+          uHotspotOpacity: { value: realtimeVisualConfig.terrain.hotspotOpacity },
         },
       }),
     [],
@@ -207,22 +254,25 @@ function useTerrainMaterial() {
 
 export function TechTerrain({
   activeCategory,
+  categoryIntensity,
 }: {
   activeCategory: CategoryKey | null
+  categoryIntensity: CategoryIntensityMap
 }) {
   const terrainGeometry = useMemo(() => makeTerrainGeometry(null), [])
   const terrainGeometryRef = useRef(terrainGeometry)
   const terrainMaterial = useTerrainMaterial()
   const terrainMaterialRef = useRef(terrainMaterial)
+  const focusHeightAttributes = useMemo(() => makeFocusHeightAttributes(), [])
   const focusStrength = useRef(0)
   const contourGeometries = useMemo(
     () =>
       categoryNodes.flatMap((node) =>
-        Array.from({ length: 4 }, (_, level) => ({
+        Array.from({ length: 5 }, (_, level) => ({
           color: level === 2 && (node.name === 'Web' || node.name === 'Pwn') ? COLORS.yellow : node.color,
           geometry: makeContourGeometry(node, level),
           nodeKey: node.key,
-          opacity: 0.2 - level * 0.025,
+          opacity: 0.19 - level * 0.022,
         })),
       ),
     [],
@@ -230,14 +280,19 @@ export function TechTerrain({
   const terrainRef = useRef<Group>(null)
 
   useEffect(() => {
-    terrainGeometryRef.current.setAttribute('aFocusHeight', makeFocusHeightAttribute(activeCategory))
+    terrainGeometryRef.current.setAttribute('aFocusHeight', focusHeightAttributes.get(activeCategory ?? 'overview') ?? focusHeightAttributes.get('overview')!)
     focusStrength.current *= activeCategory ? 0.38 : 1
-  }, [activeCategory])
+  }, [activeCategory, focusHeightAttributes])
 
   useFrame((state) => {
     terrainMaterialRef.current.uniforms.uTime.value = state.clock.elapsedTime
     focusStrength.current += ((activeCategory ? 1 : 0) - focusStrength.current) * 0.08
     terrainMaterialRef.current.uniforms.uFocusStrength.value = focusStrength.current
+    const hotspotIntensity = terrainMaterialRef.current.uniforms.uHotspotIntensity.value as number[]
+    categoryNodes.forEach((node, index) => {
+      const target = categoryIntensity[node.key] ?? 0.35
+      hotspotIntensity[index] += (target - hotspotIntensity[index]) * 0.08
+    })
     if (activeCategory) {
       const node = getCategoryNodeByKey(activeCategory)
       terrainMaterialRef.current.uniforms.uFocusCenter.value.set(node.x, node.z)
@@ -259,6 +314,29 @@ export function TechTerrain({
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.105, 0]}>
         <circleGeometry args={[4.92, 192]} />
         <meshBasicMaterial color={COLORS.bg} transparent opacity={0.68} side={DoubleSide} />
+      </mesh>
+
+      <mesh position={[0, -0.255, 0]}>
+        <cylinderGeometry args={[terrainRadius + 0.08, terrainRadius + 0.24, 0.34, 192, 1, true]} />
+        <meshBasicMaterial
+          color={COLORS.bg}
+          transparent
+          opacity={activeCategory ? 0.012 : realtimeVisualConfig.terrain.skirtOpacity}
+          side={DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.214, 0]}>
+        <ringGeometry args={[terrainRadius + 0.02, terrainRadius + 0.32, 192]} />
+        <meshBasicMaterial
+          color={COLORS.cyan}
+          transparent
+          opacity={activeCategory ? 0.006 : 0.018}
+          side={DoubleSide}
+          blending={AdditiveBlending}
+          depthWrite={false}
+        />
       </mesh>
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.086, 0]}>
@@ -336,7 +414,12 @@ export function TechTerrain({
 
       {contourGeometries.map(({ color, geometry, nodeKey, opacity }, index) => {
         const selected = activeCategory === nodeKey
-        const nextOpacity = activeCategory ? (selected ? Math.min(opacity, 0.07) : 0.006) : opacity
+        const selectedIntensity = categoryIntensity[nodeKey] ?? 0.5
+        const nextOpacity = activeCategory
+          ? selected
+            ? Math.min(opacity + selectedIntensity * 0.045, 0.16)
+            : 0.006
+          : opacity + selectedIntensity * 0.035
         return (
         <mesh key={`contour-${index}`} geometry={geometry}>
           <meshBasicMaterial

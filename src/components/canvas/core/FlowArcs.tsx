@@ -3,20 +3,67 @@ import { useFrame } from '@react-three/fiber'
 import {
   AdditiveBlending,
   CatmullRomCurve3,
+  Color,
+  ShaderMaterial,
   TubeGeometry,
   Vector3,
-  type Mesh,
-  MeshBasicMaterial,
 } from 'three'
-import { COLORS, flowRoutes, getCategoryNode, getCategoryNodeByKey, terrainHeight, type CategoryKey } from './coreSceneConfig'
+import {
+  COLORS,
+  flowRoutes,
+  getCategoryNode,
+  getCategoryNodeByKey,
+  terrainHeight,
+  type CategoryIntensityMap,
+  type CategoryKey,
+} from './coreSceneConfig'
 
 type FlowArc = {
   color: string
-  curve: CatmullRomCurve3
+  from: CategoryKey
   geometry: TubeGeometry
   key: string
   speed: number
+  to: CategoryKey
 }
+
+type LocalArc = {
+  geometry: TubeGeometry
+  key: string
+}
+
+const flowVertexShader = `
+  varying vec2 vUv;
+
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+
+const flowFragmentShader = `
+  uniform vec3 uColor;
+  uniform float uOpacity;
+  uniform float uPhase;
+  uniform float uPulse;
+  uniform float uSpeed;
+  uniform float uTime;
+  varying vec2 vUv;
+
+  void main() {
+    float packet = fract(vUv.x * 2.6 - uTime * uSpeed + uPhase);
+    float packetCore = 1.0 - smoothstep(0.0, 0.28, packet);
+    float dash = sin((vUv.x * 18.0 - uTime * uSpeed * 4.2 + uPhase * 6.28318) * 3.14159) * 0.5 + 0.5;
+    float dashCore = smoothstep(0.58, 0.98, dash);
+    float sideFade = 1.0 - smoothstep(0.18, 0.5, abs(vUv.y - 0.5));
+    float pulse = 0.82 + 0.18 * sin(uTime * 2.2 + uPhase * 6.28318);
+    float energy = 0.34 + packetCore * 0.72 + dashCore * 0.2;
+    float alpha = uOpacity * sideFade * energy * mix(0.88, pulse, uPulse);
+    vec3 color = uColor * (0.58 + energy * 0.5 + uPulse * 0.2);
+
+    gl_FragColor = vec4(color, alpha);
+  }
+`
 
 function makeFlowArc([fromName, toName]: [CategoryKey, CategoryKey], index: number): FlowArc {
   const from = getCategoryNode(fromName)
@@ -37,63 +84,108 @@ function makeFlowArc([fromName, toName]: [CategoryKey, CategoryKey], index: numb
 
   return {
     color: isPriority ? COLORS.yellow : COLORS.cyan,
-    curve,
-    geometry: new TubeGeometry(curve, 80, isPriority ? 0.012 : 0.009, 6, false),
+    from: fromName,
+    geometry: new TubeGeometry(curve, 96, isPriority ? 0.014 : 0.01, 7, false),
     key: `${fromName}-${toName}`,
-    speed: 0.065 + index * 0.008,
+    speed: 0.18 + index * 0.018,
+    to: toName,
   }
 }
 
 function makeLocalArcs(activeCategory: CategoryKey | null) {
   if (!activeCategory) return []
   const node = getCategoryNodeByKey(activeCategory)
-  return Array.from({ length: 2 }, (_, index) => {
-    const angle = index * 2.1 + node.phase
+  return Array.from({ length: 3 }, (_, index): LocalArc => {
+    const angle = index * 1.62 + node.phase
     const start = new Vector3(
       node.x + Math.cos(angle) * 0.78,
       terrainHeight(node.x, node.z) + 0.22,
       node.z + Math.sin(angle) * 0.78,
     )
     const end = new Vector3(
-      node.x + Math.cos(angle + 1.25) * 0.64,
-      terrainHeight(node.x, node.z) + 0.26,
-      node.z + Math.sin(angle + 1.25) * 0.64,
+      node.x + Math.cos(angle + 1.2) * 0.68,
+      terrainHeight(node.x, node.z) + 0.27,
+      node.z + Math.sin(angle + 1.2) * 0.68,
     )
     const curve = new CatmullRomCurve3([
       start,
-      new Vector3(node.x + Math.cos(angle + 0.5) * 0.34, terrainHeight(node.x, node.z) + 0.58, node.z + Math.sin(angle + 0.5) * 0.34),
+      new Vector3(
+        node.x + Math.cos(angle + 0.48) * 0.34,
+        terrainHeight(node.x, node.z) + 0.58,
+        node.z + Math.sin(angle + 0.48) * 0.34,
+      ),
       end,
     ])
-    return new TubeGeometry(curve, 48, 0.008, 5, false)
+
+    return {
+      geometry: new TubeGeometry(curve, 58, 0.008, 6, false),
+      key: `${activeCategory}-${index}`,
+    }
   })
 }
 
-export function FlowArcs({ activeCategory }: { activeCategory: CategoryKey | null }) {
-  const particles = useRef<Mesh[]>([])
+export function FlowArcs({
+  activeCategory,
+  categoryIntensity,
+}: {
+  activeCategory: CategoryKey | null
+  categoryIntensity: CategoryIntensityMap
+}) {
+  const arcMaterials = useRef<Array<ShaderMaterial | null>>([])
+  const localMaterials = useRef<Array<ShaderMaterial | null>>([])
   const arcs = useMemo(() => flowRoutes.map(makeFlowArc), [])
   const localArcs = useMemo(() => makeLocalArcs(activeCategory), [activeCategory])
+  const arcUniforms = useMemo(
+    () =>
+      arcs.map((arc, index) => ({
+        uColor: { value: new Color(arc.color) },
+        uOpacity: { value: 0.26 },
+        uPhase: { value: index * 0.17 },
+        uPulse: { value: 0 },
+        uSpeed: { value: arc.speed },
+        uTime: { value: 0 },
+      })),
+    [arcs],
+  )
+  const localUniforms = useMemo(
+    () =>
+      localArcs.map((_, index) => ({
+        uColor: { value: new Color(activeCategory ? getCategoryNodeByKey(activeCategory).accentColor : COLORS.cyan) },
+        uOpacity: { value: 0 },
+        uPhase: { value: index * 0.23 },
+        uPulse: { value: 1 },
+        uSpeed: { value: 0.32 + index * 0.04 },
+        uTime: { value: 0 },
+      })),
+    [activeCategory, localArcs],
+  )
 
   useFrame((state) => {
     const t = state.clock.elapsedTime
     arcs.forEach((arc, arcIndex) => {
-      const related = !activeCategory || arc.key.includes(activeCategory)
-      for (let particleIndex = 0; particleIndex < 2; particleIndex += 1) {
-        const mesh = particles.current[arcIndex * 2 + particleIndex]
-        if (!mesh) continue
-        const u = (t * arc.speed * (related && activeCategory ? 1.7 : 1) + particleIndex * 0.38 + arcIndex * 0.11) % 1
-        const point = arc.curve.getPoint(u)
-        mesh.position.copy(point)
-        const material = mesh.material as MeshBasicMaterial
-        material.opacity =
-          activeCategory && !related ? 0 : (related ? (activeCategory ? 0.34 : 0.5) : 0.02) + Math.sin(t * 3.2 + particleIndex) * 0.06
-      }
+      const material = arcMaterials.current[arcIndex]
+      if (!material) return
+      const related = !activeCategory || arc.from === activeCategory || arc.to === activeCategory
+      const intensity = Math.max(categoryIntensity[arc.from] ?? 0.35, categoryIntensity[arc.to] ?? 0.35)
+      material.uniforms.uTime.value = t
+      material.uniforms.uOpacity.value = activeCategory && !related ? 0.018 : activeCategory ? 0.18 + intensity * 0.2 : 0.18 + intensity * 0.16
+      material.uniforms.uPulse.value += ((activeCategory && related ? 1 : 0) - material.uniforms.uPulse.value) * 0.08
+      material.uniforms.uSpeed.value = arc.speed * (activeCategory && related ? 1.35 : 1 + intensity * 0.24)
+    })
+
+    const activeIntensity = activeCategory ? categoryIntensity[activeCategory] ?? 0.5 : 0
+    localMaterials.current.forEach((material, index) => {
+      if (!material) return
+      material.uniforms.uTime.value = t
+      material.uniforms.uOpacity.value += ((activeCategory ? 0.16 + activeIntensity * 0.22 : 0) - material.uniforms.uOpacity.value) * 0.1
+      material.uniforms.uSpeed.value = 0.32 + index * 0.04 + activeIntensity * 0.18
     })
   })
 
   useEffect(
     () => () => {
       arcs.forEach((arc) => arc.geometry.dispose())
-      localArcs.forEach((geometry) => geometry.dispose())
+      localArcs.forEach((arc) => arc.geometry.dispose())
     },
     [arcs, localArcs],
   )
@@ -101,53 +193,32 @@ export function FlowArcs({ activeCategory }: { activeCategory: CategoryKey | nul
   return (
     <group>
       {arcs.map((arc, arcIndex) => (
-        <group key={arc.key}>
-          <mesh geometry={arc.geometry}>
-            <meshBasicMaterial
-              color={arc.color}
-              transparent
-              opacity={
-                activeCategory && !arc.key.includes(activeCategory)
-                  ? 0.02
-                  : arc.color === COLORS.yellow
-                    ? activeCategory
-                      ? 0.32
-                      : 0.36
-                    : activeCategory
-                      ? 0.26
-                      : 0.28
-              }
-              blending={AdditiveBlending}
-              depthWrite={false}
-            />
-          </mesh>
-          {[0, 1].map((particleIndex) => (
-            <mesh
-              key={`${arc.key}-particle-${particleIndex}`}
-              ref={(element) => {
-                if (element) particles.current[arcIndex * 2 + particleIndex] = element
-              }}
-            >
-              <sphereGeometry args={[particleIndex === 0 ? 0.048 : 0.036, 12, 12]} />
-              <meshBasicMaterial
-                color={arc.color}
-                transparent
-                opacity={0.7}
-                blending={AdditiveBlending}
-                depthWrite={false}
-              />
-            </mesh>
-          ))}
-        </group>
-      ))}
-      {localArcs.map((geometry, index) => (
-        <mesh key={`local-flow-${activeCategory}-${index}`} geometry={geometry}>
-          <meshBasicMaterial
-            color={activeCategory ? getCategoryNodeByKey(activeCategory).accentColor : COLORS.cyan}
-            transparent
-            opacity={activeCategory ? 0.24 : 0}
+        <mesh key={arc.key} geometry={arc.geometry}>
+          <shaderMaterial
+            ref={(material) => {
+              arcMaterials.current[arcIndex] = material
+            }}
             blending={AdditiveBlending}
             depthWrite={false}
+            fragmentShader={flowFragmentShader}
+            transparent
+            uniforms={arcUniforms[arcIndex]}
+            vertexShader={flowVertexShader}
+          />
+        </mesh>
+      ))}
+      {localArcs.map((arc, index) => (
+        <mesh key={`local-flow-${arc.key}`} geometry={arc.geometry}>
+          <shaderMaterial
+            ref={(material) => {
+              localMaterials.current[index] = material
+            }}
+            blending={AdditiveBlending}
+            depthWrite={false}
+            fragmentShader={flowFragmentShader}
+            transparent
+            uniforms={localUniforms[index]}
+            vertexShader={flowVertexShader}
           />
         </mesh>
       ))}

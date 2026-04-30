@@ -782,10 +782,20 @@ function drawChallengeDetailPanel(
     })
     ctx.fillStyle = 'rgba(203, 216, 221, 0.72)'
     setFont(ctx, 23, 800)
-    ctx.fillText('FIRST BLOOD', 72, height - 106)
-    ctx.fillStyle = '#ffd21f'
-    setFont(ctx, 31, 900)
-    ctx.fillText(selectedChallenge.firstBloodTeam ?? '尚未产生', 72, height - 62)
+    ctx.fillText('BLOODS', 72, height - 128)
+    ;[
+      ['1ST', selectedChallenge.bloods?.first ?? selectedChallenge.firstBloodTeam ?? '尚未产生'],
+      ['2ND', selectedChallenge.bloods?.second ?? '尚未产生'],
+      ['3RD', selectedChallenge.bloods?.third ?? '尚未产生'],
+    ].forEach(([label, value], index) => {
+      const x = 72 + index * 250
+      ctx.fillStyle = index === 0 ? '#ffd21f' : 'rgba(203, 216, 221, 0.72)'
+      setMonoFont(ctx, 20, 900)
+      ctx.fillText(label, x, height - 86)
+      ctx.fillStyle = '#f7fbff'
+      setFont(ctx, 24, 900)
+      ctx.fillText(value, x + 48, height - 86)
+    })
   }
 
   ctx.fillStyle = 'rgba(155, 221, 255, 0.18)'

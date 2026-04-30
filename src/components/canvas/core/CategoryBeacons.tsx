@@ -9,8 +9,9 @@ import {
   type Mesh as ThreeMesh,
   MeshBasicMaterial,
   ShaderMaterial,
+  Vector3,
 } from 'three'
-import { COLORS, categoryNodes, terrainHeight, type CategoryKey } from './coreSceneConfig'
+import { categoryNodes, terrainHeight, type CategoryIntensityMap, type CategoryKey } from './coreSceneConfig'
 
 function applyBeaconOpacity(group: Group, opacity: number) {
   group.traverse((object) => {
@@ -60,20 +61,46 @@ void main() {
 }
 `
 
+const beamFragmentShader = `
+varying vec2 vUv;
+uniform float uTime;
+uniform float uOpacity;
+uniform float uIntensity;
+uniform vec3 uColor;
+uniform vec3 uAccent;
+
+void main() {
+  float circumference = abs(sin(vUv.x * 6.2831853));
+  float verticalFade = smoothstep(0.02, 0.18, vUv.y) * (1.0 - smoothstep(0.78, 1.0, vUv.y));
+  float centerBlade = pow(circumference, 7.0);
+  float sideBlade = pow(abs(sin(vUv.x * 18.849556)), 11.0) * 0.34;
+  float scan = smoothstep(0.46, 0.98, sin(vUv.y * 34.0 - uTime * (5.2 + uIntensity * 2.1)) * 0.5 + 0.5);
+  float packet = 1.0 - smoothstep(0.02, 0.13, abs(fract(vUv.y * 2.4 - uTime * (0.35 + uIntensity * 0.2)) - 0.5));
+  float shimmer = 0.78 + 0.22 * sin(uTime * 2.7 + vUv.y * 12.0 + vUv.x * 6.2831853);
+  float energy = centerBlade * 0.72 + sideBlade + scan * 0.22 + packet * 0.28;
+  float alpha = energy * verticalFade * shimmer * uOpacity;
+  vec3 color = mix(uColor, uAccent, packet * 0.46 + scan * 0.18) * (0.72 + energy * 0.5 + uIntensity * 0.24);
+
+  gl_FragColor = vec4(color, alpha);
+}
+`
+
 const auraFragmentShader = `
 varying vec2 vUv;
 uniform float uTime;
 uniform float uOpacity;
+uniform float uIntensity;
 uniform vec3 uColor;
 
 void main() {
   float x = abs(vUv.x - 0.5) * 2.0;
-  float center = pow(max(0.0, 1.0 - x), 1.75);
+  float center = pow(max(0.0, 1.0 - x), 1.72);
   float bottomFade = smoothstep(0.0, 0.18, vUv.y);
   float topFade = 1.0 - smoothstep(0.72, 1.0, vUv.y);
   float vertical = bottomFade * topFade;
-  float scan = 0.72 + 0.28 * sin((vUv.y * 18.0) - uTime * 3.2);
-  float alpha = center * vertical * scan * uOpacity;
+  float scan = 0.66 + 0.34 * sin((vUv.y * (18.0 + uIntensity * 6.0)) - uTime * (3.2 + uIntensity * 1.4));
+  float lattice = smoothstep(0.82, 0.99, sin(vUv.y * 52.0 - uTime * 2.4) * 0.5 + 0.5) * 0.16;
+  float alpha = center * vertical * (scan + lattice) * uOpacity;
 
   gl_FragColor = vec4(uColor, alpha);
 }
@@ -83,6 +110,7 @@ const baseGlowFragmentShader = `
 varying vec2 vUv;
 uniform float uTime;
 uniform float uOpacity;
+uniform float uIntensity;
 uniform vec3 uColor;
 
 void main() {
@@ -93,23 +121,31 @@ void main() {
   float core = pow(max(0.0, 1.0 - r), 2.2);
   float ringA = 1.0 - smoothstep(0.025, 0.055, abs(r - 0.38));
   float ringB = 1.0 - smoothstep(0.02, 0.06, abs(r - 0.62));
-  float spokes = pow(max(0.0, cos(angle * 6.0 + uTime * 0.45)), 18.0) * smoothstep(0.18, 0.72, r);
-  float scan = 0.78 + 0.22 * sin(r * 20.0 - uTime * 2.4);
-  float alpha = (core * 0.32 + ringA * 0.48 + ringB * 0.38 + spokes * 0.35) * edgeFade * scan * uOpacity;
+  float ringC = 1.0 - smoothstep(0.015, 0.052, abs(r - (0.72 + sin(uTime * 0.55) * 0.035)));
+  float spokes = pow(max(0.0, cos(angle * 6.0 + uTime * (0.45 + uIntensity * 0.2))), 18.0) * smoothstep(0.18, 0.72, r);
+  float scan = 0.78 + 0.22 * sin(r * (20.0 + uIntensity * 5.0) - uTime * 2.4);
+  float alpha = (core * 0.28 + ringA * 0.44 + ringB * 0.34 + ringC * 0.2 + spokes * 0.32) * edgeFade * scan * uOpacity;
 
   gl_FragColor = vec4(uColor, alpha);
 }
 `
 
+const challengeBeamPalette: Record<CategoryKey, { accent: string; core: string; highlight: string }> = {
+  web: { accent: '#ffb000', core: '#ffb000', highlight: '#fff1a8' },
+  pwn: { accent: '#ff4d6d', core: '#ff4d6d', highlight: '#ffd1dc' },
+  rev: { accent: '#b8ff3d', core: '#b8ff3d', highlight: '#efffba' },
+  crypto: { accent: '#20e0ff', core: '#20e0ff', highlight: '#c9faff' },
+  misc: { accent: '#a66cff', core: '#a66cff', highlight: '#ead9ff' },
+  forensics: { accent: '#4ea3ff', core: '#4ea3ff', highlight: '#d9ecff' },
+}
+
 function beaconPalette(node: (typeof categoryNodes)[number]) {
-  if (node.key === 'web' || node.key === 'pwn') return { core: COLORS.yellow, accent: COLORS.yellowSoft }
-  if (node.key === 'crypto' || node.key === 'forensics') return { core: COLORS.cyan, accent: COLORS.cyanSoft }
-  if (node.key === 'rev') return { core: COLORS.white, accent: COLORS.cyanSoft }
-  return { core: COLORS.yellowSoft, accent: COLORS.cyan }
+  return challengeBeamPalette[node.key]
 }
 
 function Beacon({
   activeCategory,
+  categoryIntensity,
   hoverCategory,
   index,
   node,
@@ -117,6 +153,7 @@ function Beacon({
   onSelectCategory,
 }: {
   activeCategory: CategoryKey | null
+  categoryIntensity: CategoryIntensityMap
   hoverCategory: CategoryKey | null
   index: number
   node: (typeof categoryNodes)[number]
@@ -128,34 +165,50 @@ function Beacon({
   const coreLine = useRef<ThreeMesh>(null)
   const baseGlow = useRef<ThreeMesh>(null)
   const baseGlowMaterial = useRef<ShaderMaterial>(null)
+  const coreBeamMaterial = useRef<ShaderMaterial>(null)
   const liftedGlyph = useRef<Group>(null)
   const pulseRing = useRef<ThreeMesh>(null)
   const scanArc = useRef<ThreeMesh>(null)
   const topSparkle = useRef<ThreeMesh>(null)
   const auraMaterials = useRef<Array<ShaderMaterial | null>>([])
   const particleRefs = useRef<Array<ThreeMesh | null>>([])
+  const cameraLocalPosition = useMemo(() => new Vector3(), [])
   const isPriority = node.name === 'Web' || node.name === 'Pwn'
   const palette = beaconPalette(node)
   const color = palette.core
   const accent = palette.accent
-  const height = isPriority ? 1.18 : 0.96 + (index % 3) * 0.08
+  const highlight = palette.highlight
+  const dataIntensity = categoryIntensity[node.key] ?? 0.5
+  const height = (isPriority ? 1.18 : 0.96 + (index % 3) * 0.08) + dataIntensity * 0.1
   const baseY = terrainHeight(node.x, node.z) + 0.045
   const auraUniforms = useMemo(
     () =>
       Array.from({ length: 3 }, () => ({
         uTime: { value: 0 },
         uOpacity: { value: 0.1 },
+        uIntensity: { value: dataIntensity },
         uColor: { value: new Color(color) },
       })),
-    [color],
+    [color, dataIntensity],
+  )
+  const coreBeamUniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uOpacity: { value: 0.48 },
+      uIntensity: { value: dataIntensity },
+      uColor: { value: new Color(color) },
+      uAccent: { value: new Color(highlight) },
+    }),
+    [color, dataIntensity, highlight],
   )
   const baseGlowUniforms = useMemo(
     () => ({
       uTime: { value: 0 },
       uOpacity: { value: 0.18 },
+      uIntensity: { value: dataIntensity },
       uColor: { value: new Color(accent) },
     }),
-    [accent],
+    [accent, dataIntensity],
   )
   const auraPlanes = useMemo(
     () =>
@@ -208,30 +261,39 @@ function Beacon({
 
   useFrame((state) => {
     const t = state.clock.elapsedTime
-    const pulse = Math.sin(t * 1.6 + index * 0.72) * 0.5 + 0.5
+    const pulse = Math.sin(t * (1.35 + dataIntensity * 0.62) + index * 0.72) * 0.5 + 0.5
     const selected = activeCategory === node.key
     const hovered = hoverCategory === node.key
     const hasFocus = Boolean(activeCategory)
     const dim = hasFocus && !selected ? 0.16 : 1
     const boost = selected ? 1.35 : hovered ? 1.16 : 1
     const visibility = dim * boost
-    const activity = selected ? 1 : hovered ? 0.58 : 0
+    const activity = selected ? 1 : hovered ? 0.58 : dataIntensity * 0.22
 
     if (beam.current) {
-      beam.current.scale.y = 0.96 + pulse * 0.08 + activity * 0.06
+      beam.current.scale.y = 0.96 + pulse * (0.06 + dataIntensity * 0.035) + activity * 0.06
       beam.current.position.y = baseY + (height * beam.current.scale.y) / 2
-      beam.current.rotation.y = t * (0.1 + activity * 0.035) + index
+      if (group.current) {
+        cameraLocalPosition.copy(state.camera.position)
+        group.current.worldToLocal(cameraLocalPosition)
+        beam.current.rotation.y = Math.atan2(cameraLocalPosition.x, cameraLocalPosition.z)
+      }
     }
 
-    setDynamicOpacity(coreLine.current, 0.48 + pulse * 0.05 + activity * 0.09)
+    if (coreBeamMaterial.current) {
+      coreBeamMaterial.current.uniforms.uTime.value = t + index * 0.19
+      coreBeamMaterial.current.uniforms.uIntensity.value += (dataIntensity - coreBeamMaterial.current.uniforms.uIntensity.value) * 0.08
+    }
+    setDynamicOpacity(coreLine.current, 0.34 + dataIntensity * 0.2 + pulse * 0.06 + activity * 0.1)
 
     if (baseGlowMaterial.current) {
       baseGlowMaterial.current.uniforms.uTime.value = t + index * 0.33
+      baseGlowMaterial.current.uniforms.uIntensity.value += (dataIntensity - baseGlowMaterial.current.uniforms.uIntensity.value) * 0.08
     }
 
     if (baseGlow.current) {
       baseGlow.current.scale.setScalar(1 + pulse * 0.035 + activity * 0.045)
-      setDynamicOpacity(baseGlow.current, 0.2 + pulse * 0.03 + activity * 0.12)
+      setDynamicOpacity(baseGlow.current, 0.16 + dataIntensity * 0.08 + pulse * 0.03 + activity * 0.12)
     }
 
     if (liftedGlyph.current) {
@@ -242,18 +304,19 @@ function Beacon({
     auraMaterials.current.forEach((material, auraIndex) => {
       if (!material) return
       material.uniforms.uTime.value = t + index * 0.47 + auraIndex * 0.2
-      material.userData.dynamicOpacity = 0.105 + pulse * 0.016 + activity * 0.03 - auraIndex * 0.007
+      material.uniforms.uIntensity.value += (dataIntensity - material.uniforms.uIntensity.value) * 0.08
+      material.userData.dynamicOpacity = 0.085 + dataIntensity * 0.035 + pulse * 0.016 + activity * 0.03 - auraIndex * 0.007
     })
 
     if (scanArc.current) {
-      scanArc.current.rotation.z = t * (0.65 + activity * 0.65) + index
-      setDynamicOpacity(scanArc.current, 0.42 + activity * 0.18)
+      scanArc.current.rotation.z = t * (0.52 + dataIntensity * 0.32 + activity * 0.65) + index
+      setDynamicOpacity(scanArc.current, 0.34 + dataIntensity * 0.16 + activity * 0.18)
     }
 
     if (pulseRing.current) {
-      const u = (t * (0.42 + activity * 0.3) + index * 0.18) % 1
+      const u = (t * (0.34 + dataIntensity * 0.18 + activity * 0.3) + index * 0.18) % 1
       pulseRing.current.scale.setScalar(0.9 + u * 1.55)
-      setDynamicOpacity(pulseRing.current, (1 - u) * (0.28 + activity * 0.07))
+      setDynamicOpacity(pulseRing.current, (1 - u) * (0.2 + dataIntensity * 0.14 + activity * 0.07))
     }
 
     if (topSparkle.current) {
@@ -264,7 +327,7 @@ function Beacon({
       setDynamicOpacity(topSparkle.current, 0.52 + pulse * 0.08 + activity * 0.08)
     }
 
-    const particleSpeed = selected ? 1.55 : hovered ? 1.25 : 1
+    const particleSpeed = selected ? 1.55 : hovered ? 1.25 : 0.86 + dataIntensity * 0.28
     particles.forEach((particle, particleIndex) => {
       const mesh = particleRefs.current[particleIndex]
       if (!mesh) return
@@ -276,7 +339,7 @@ function Beacon({
         Math.sin(particle.angle) * (particle.radius - drift),
       )
       const fade = Math.sin(progress * Math.PI)
-      setDynamicOpacity(mesh, 0.2 + fade * (0.28 + activity * 0.08))
+      setDynamicOpacity(mesh, 0.16 + dataIntensity * 0.08 + fade * (0.24 + activity * 0.08))
     })
 
     if (group.current) applyBeaconOpacity(group.current, visibility)
@@ -303,14 +366,17 @@ function Beacon({
     >
       <group ref={beam} position={[0, baseY + height / 2, 0]}>
         <mesh ref={coreLine} raycast={() => undefined}>
-          <cylinderGeometry args={[0.016, 0.016, height, 16, 1, true]} />
-          <meshBasicMaterial
-            color={color}
+          <cylinderGeometry args={[0.022, 0.034, height, 28, 1, true]} />
+          <shaderMaterial
+            ref={coreBeamMaterial}
+            vertexShader={auraVertexShader}
+            fragmentShader={beamFragmentShader}
             transparent
-            opacity={0.48}
             side={DoubleSide}
             blending={AdditiveBlending}
+            depthTest={false}
             depthWrite={false}
+            uniforms={coreBeamUniforms}
           />
         </mesh>
         {auraPlanes.map((plane, auraIndex) => (
@@ -325,6 +391,7 @@ function Beacon({
               transparent
               side={DoubleSide}
               blending={AdditiveBlending}
+              depthTest={false}
               depthWrite={false}
               uniforms={auraUniforms[auraIndex]}
             />
@@ -493,11 +560,13 @@ function Beacon({
 
 export function CategoryBeacons({
   activeCategory,
+  categoryIntensity,
   hoverCategory,
   onHoverCategory,
   onSelectCategory,
 }: {
   activeCategory: CategoryKey | null
+  categoryIntensity: CategoryIntensityMap
   hoverCategory: CategoryKey | null
   onHoverCategory: (key: CategoryKey | null) => void
   onSelectCategory: (key: CategoryKey) => void
@@ -508,6 +577,7 @@ export function CategoryBeacons({
         <Beacon
           key={node.name}
           activeCategory={activeCategory}
+          categoryIntensity={categoryIntensity}
           hoverCategory={hoverCategory}
           index={index}
           node={node}

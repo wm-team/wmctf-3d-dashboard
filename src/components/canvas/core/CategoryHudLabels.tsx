@@ -304,20 +304,11 @@ function CategoryHudLabel({
       targetPosition.set(node.calloutPosition[0], node.calloutPosition[1] + pulse * 0.018, node.calloutPosition[2])
     }
     group.current.position.lerp(targetPosition, active ? 0.09 : 0.08)
-    if (active) {
-      group.current.parent?.getWorldQuaternion(parentWorldQuaternion)
-      targetQuaternion.copy(parentWorldQuaternion).invert().multiply(state.camera.quaternion)
-      pitchQuaternion.setFromAxisAngle(pitchAxis, -0.1 + state.pointer.y * 0.006)
-      targetQuaternion.multiply(pitchQuaternion)
-      group.current.quaternion.slerp(targetQuaternion, 0.18)
-    } else {
-      const targetRotationX = -0.32 + state.pointer.y * 0.018
-      const targetRotationY = -state.pointer.x * 0.014
-      const targetRotationZ = pulse * 0.003
-      group.current.rotation.x += (targetRotationX - group.current.rotation.x) * 0.1
-      group.current.rotation.y += (targetRotationY - group.current.rotation.y) * 0.1
-      group.current.rotation.z += (targetRotationZ - group.current.rotation.z) * 0.1
-    }
+    group.current.parent?.getWorldQuaternion(parentWorldQuaternion)
+    targetQuaternion.copy(parentWorldQuaternion).invert().multiply(state.camera.quaternion)
+    pitchQuaternion.setFromAxisAngle(pitchAxis, active ? -0.1 + state.pointer.y * 0.006 : -0.18 + state.pointer.y * 0.008)
+    targetQuaternion.multiply(pitchQuaternion)
+    group.current.quaternion.slerp(targetQuaternion, active ? 0.18 : 0.14)
     group.current.scale.setScalar(active ? 1.05 : hovered ? 1.02 : activeCategory ? 0.82 : 1)
   })
 

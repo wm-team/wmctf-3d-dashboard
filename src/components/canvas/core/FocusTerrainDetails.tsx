@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { AdditiveBlending, DoubleSide, Mesh, MeshBasicMaterial, type Group } from 'three'
-import { getCategoryNodeByKey, terrainHeight, type CategoryKey } from './coreSceneConfig'
+import { getCategoryNodeByKey, terrainHeight, type CategoryIntensityMap, type CategoryKey } from './coreSceneConfig'
 
 function applyGroupOpacity(group: Group, opacity: number) {
   group.traverse((object) => {
@@ -35,17 +35,25 @@ function DetailMaterial({
   )
 }
 
-export function FocusTerrainDetails({ activeCategory }: { activeCategory: CategoryKey | null }) {
+export function FocusTerrainDetails({
+  activeCategory,
+  categoryIntensity,
+}: {
+  activeCategory: CategoryKey | null
+  categoryIntensity?: CategoryIntensityMap
+}) {
   const group = useRef<Group>(null)
   const opacity = useRef(0)
   const node = activeCategory ? getCategoryNodeByKey(activeCategory) : null
+  const intensity = activeCategory ? categoryIntensity?.[activeCategory] ?? 0.5 : 0.5
 
-  useFrame(() => {
+  useFrame((state) => {
     opacity.current += ((node ? 1 : 0) - opacity.current) * 0.075
     if (!group.current || !node) return
-    group.current.position.set(node.x, terrainHeight(node.x, node.z) + 0.07, node.z)
-    group.current.scale.setScalar(0.9 + opacity.current * 0.1)
-    applyGroupOpacity(group.current, opacity.current)
+    const float = Math.sin(state.clock.elapsedTime * (0.88 + intensity * 0.24) + node.phase) * 0.012
+    group.current.position.set(node.x, terrainHeight(node.x, node.z) + 0.07 + float, node.z)
+    group.current.scale.setScalar(0.88 + opacity.current * (0.1 + intensity * 0.05))
+    applyGroupOpacity(group.current, opacity.current * (0.86 + intensity * 0.18))
   })
 
   if (!node) return null

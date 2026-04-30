@@ -1,9 +1,15 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { AdditiveBlending, DoubleSide, type Group, type Mesh, MeshBasicMaterial } from 'three'
-import { COLORS, getCategoryNodeByKey, terrainHeight, type CategoryKey } from './coreSceneConfig'
+import { COLORS, getCategoryNodeByKey, terrainHeight, type CategoryIntensityMap, type CategoryKey } from './coreSceneConfig'
 
-export function RadarRings({ activeCategory }: { activeCategory: CategoryKey | null }) {
+export function RadarRings({
+  activeCategory,
+  categoryIntensity,
+}: {
+  activeCategory: CategoryKey | null
+  categoryIntensity: CategoryIntensityMap
+}) {
   const scanRings = useRef<Mesh[]>([])
   const localScanRings = useRef<Mesh[]>([])
   const outerA = useRef<Group>(null)
@@ -13,18 +19,27 @@ export function RadarRings({ activeCategory }: { activeCategory: CategoryKey | n
 
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime
+    const values = Object.values(categoryIntensity)
+    const averageIntensity = values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1)
+    const activeIntensity = activeCategory ? categoryIntensity[activeCategory] ?? averageIntensity : averageIntensity
     scanRings.current.forEach((mesh, index) => {
-      const u = ((t * 0.34 + index / 3) % 1) || 0
+      const u = ((t * (0.28 + averageIntensity * 0.16) + index / 3) % 1) || 0
       mesh.scale.setScalar(0.38 + u * 3.9)
       const material = mesh.material as MeshBasicMaterial
-      material.opacity = (1 - u) ** 1.4 * (activeCategory ? 0.08 : index === 0 ? 0.32 : 0.22)
+      material.opacity =
+        (1 - u) ** 1.4 *
+        (activeCategory
+          ? 0.06 + activeIntensity * 0.07
+          : index === 0
+            ? 0.22 + averageIntensity * 0.18
+            : 0.16 + averageIntensity * 0.12)
     })
 
     localScanRings.current.forEach((mesh, index) => {
-      const u = ((t * 0.62 + index / 3) % 1) || 0
+      const u = ((t * (0.48 + activeIntensity * 0.3) + index / 3) % 1) || 0
       mesh.scale.setScalar(0.28 + u * 1.45)
       const material = mesh.material as MeshBasicMaterial
-      material.opacity = activeCategory ? (1 - u) ** 1.25 * 0.42 : 0
+      material.opacity = activeCategory ? (1 - u) ** 1.25 * (0.28 + activeIntensity * 0.26) : 0
     })
 
     if (outerA.current) outerA.current.rotation.y += delta * 0.12

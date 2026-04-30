@@ -13,6 +13,8 @@ export const terrainRadius = 4.62
 
 export type CategoryKey = 'web' | 'pwn' | 'rev' | 'crypto' | 'misc' | 'forensics'
 
+export type CategoryIntensityMap = Record<CategoryKey, number>
+
 export type FocusTheme = 'gateway' | 'exploit' | 'reverse' | 'cipher' | 'chaos' | 'forensic'
 
 export type CategorySceneNode = {

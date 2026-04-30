@@ -14,9 +14,11 @@ function getFocusWorldPoint(activeCategory: CategoryKey, dataCoreGroup: RefObjec
 
 export function CameraRig({
   activeCategory,
+  activeFocusWorldPoint,
   dataCoreGroup,
 }: {
   activeCategory: CategoryKey | null
+  activeFocusWorldPoint: RefObject<Vector3>
   dataCoreGroup: RefObject<Group | null>
 }) {
   const lookAt = useRef(new Vector3(0, 0.08, -0.08))
@@ -28,8 +30,8 @@ export function CameraRig({
     const { pointer } = state
 
     if (activeCategory) {
-      const focusWorld = getFocusWorldPoint(activeCategory, dataCoreGroup)
-      const side = activeCategory === 'web' || activeCategory === 'forensics' ? -1 : 1
+      const focusWorld = activeFocusWorldPoint.current ?? getFocusWorldPoint(activeCategory, dataCoreGroup)
+      const side = focusWorld.x > 0 ? -1 : 1
       targetPosition.copy(focusWorld).add(new Vector3(side * 1.05 + pointer.x * 0.05, 2.72 + pointer.y * 0.04, 5.1))
       targetLookAt.copy(focusWorld).add(new Vector3(side * 0.18 + pointer.x * 0.02, 0.42 + pointer.y * 0.02, -0.22))
       camera.fov += (39.6 - camera.fov) * 0.065
