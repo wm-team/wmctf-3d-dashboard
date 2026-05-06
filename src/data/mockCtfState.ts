@@ -1,4 +1,60 @@
-import type { CtfSnapshot } from '@/types/ctf'
+import type { CtfSnapshot, TeamRank } from '@/types/ctf'
+
+const baseTopTeams: TeamRank[] = [
+  { teamId: 'team-0x300', rank: 1, previousRank: 1, name: '0x300', score: 2450, previousScore: 2440, solves: 28, previousSolved: 28, firstBloods: 6, topCategory: 'Web' },
+  { teamId: 'team-r3kapig', rank: 2, previousRank: 3, name: 'r3kapig', score: 2280, previousScore: 2190, solves: 26, previousSolved: 25, firstBloods: 5, topCategory: 'Pwn' },
+  { teamId: 'team-aaa', rank: 3, previousRank: 2, name: 'AAA', score: 2050, previousScore: 2050, solves: 24, previousSolved: 24, firstBloods: 4, topCategory: 'Crypto' },
+  { teamId: 'team-tianshu', rank: 4, previousRank: 4, name: '天枢战队', score: 1780, previousScore: 1710, solves: 20, previousSolved: 19, firstBloods: 3, topCategory: 'Misc' },
+  { teamId: 'team-nepnep', rank: 5, previousRank: 5, name: 'Nepnep', score: 1640, previousScore: 1640, solves: 18, previousSolved: 18, firstBloods: 2, topCategory: 'Misc' },
+  { teamId: 'team-cloud', rank: 6, previousRank: 7, name: '云巅之上', score: 1500, previousScore: 1420, solves: 17, previousSolved: 16, firstBloods: 2, topCategory: 'Forensics' },
+  { teamId: 'team-lighthouse', rank: 7, previousRank: 6, name: '灯塔守望者', score: 1380, previousScore: 1380, solves: 15, previousSolved: 15, firstBloods: 1, topCategory: 'Pwn' },
+  { teamId: 'team-bytebandits', rank: 8, previousRank: 8, name: 'ByteBandits', score: 1230, previousScore: 1180, solves: 14, previousSolved: 13, firstBloods: 2, topCategory: 'Web' },
+  { teamId: 'team-redbud', rank: 9, previousRank: 10, name: 'Redbud', score: 980, previousScore: 900, solves: 11, previousSolved: 10, firstBloods: 0, topCategory: 'Rev' },
+  { teamId: 'team-k4n0n', rank: 10, previousRank: 9, name: 'K4n0n', score: 860, previousScore: 860, solves: 10, previousSolved: 10, firstBloods: 0, topCategory: 'Rev' },
+]
+
+const additionalTeams = [
+  ['team-nullroute', 'NullRoute', 790, 9, 1, 'Pwn'],
+  ['team-snowcrash', 'SnowCrash', 735, 9, 1, 'Crypto'],
+  ['team-cybermonks', 'CyberMonks', 700, 8, 1, 'Web'],
+  ['team-matrixlab', 'MatrixLab', 660, 8, 0, 'Rev'],
+  ['team-echo', '回声实验室', 620, 7, 0, 'Misc'],
+  ['team-aurora', 'AuroraSec', 585, 7, 1, 'Forensics'],
+  ['team-hashcat', 'Hashcatters', 560, 6, 0, 'Crypto'],
+  ['team-rootkit', 'RootkitLab', 530, 6, 0, 'Pwn'],
+  ['team-sudo', 'sudoers', 510, 6, 0, 'Web'],
+  ['team-zeroday', 'ZeroDay', 485, 5, 0, 'Rev'],
+  ['team-packet', 'PacketStorm', 460, 5, 0, 'Forensics'],
+  ['team-photon', 'Photon', 430, 5, 0, 'Crypto'],
+  ['team-nova', 'NovaShell', 410, 4, 0, 'Pwn'],
+  ['team-hex', 'HexGarden', 386, 4, 0, 'Misc'],
+  ['team-orbit', 'OrbitSec', 360, 4, 0, 'Web'],
+  ['team-river', '长河安全', 335, 4, 0, 'Forensics'],
+  ['team-moonshot', 'Moonshot', 310, 3, 0, 'Crypto'],
+  ['team-pragma', 'Pragma', 288, 3, 0, 'Rev'],
+  ['team-binary', 'BinaryTea', 260, 3, 0, 'Pwn'],
+  ['team-ink', '墨攻小队', 235, 2, 0, 'Misc'],
+] as const
+
+const mockTopTeams: TeamRank[] = [
+  ...baseTopTeams,
+  ...additionalTeams.map(([teamId, name, score, solves, firstBloods, topCategory], index) => {
+    const rank = index + baseTopTeams.length + 1
+    const previousRank = rank + (index % 5 === 0 ? 1 : index % 6 === 0 ? -1 : 0)
+    return {
+      firstBloods,
+      name,
+      previousRank,
+      previousScore: score - (index % 4 === 0 ? 70 : index % 3 === 0 ? 40 : 0),
+      previousSolved: solves - (index % 4 === 0 ? 1 : 0),
+      rank,
+      score,
+      solves,
+      teamId,
+      topCategory,
+    }
+  }),
+]
 
 export const mockCtfState: CtfSnapshot = {
   eventName: 'WMCTF 2026',
@@ -22,18 +78,7 @@ export const mockCtfState: CtfSnapshot = {
     'AAA 一血 · Crypto「easy_rsa」',
     '天枢战队 解出 · Rev「ez_rev」',
   ],
-  topTeams: [
-    { rank: 1, name: '0x300', score: 2450, solves: 28 },
-    { rank: 2, name: 'r3kapig', score: 2280, solves: 26 },
-    { rank: 3, name: 'AAA', score: 2050, solves: 24 },
-    { rank: 4, name: '天枢战队', score: 1780, solves: 20 },
-    { rank: 5, name: 'Nepnep', score: 1640, solves: 18 },
-    { rank: 6, name: '云巅之上', score: 1500, solves: 17 },
-    { rank: 7, name: '灯塔守望者', score: 1380, solves: 15 },
-    { rank: 8, name: 'ByteBandits', score: 1230, solves: 14 },
-    { rank: 9, name: 'Redbud', score: 980, solves: 11 },
-    { rank: 10, name: 'K4n0n', score: 860, solves: 10 },
-  ],
+  topTeams: mockTopTeams,
   recentSolves: [
     {
       time: '15:30:12',

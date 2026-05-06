@@ -18,10 +18,17 @@ import {
   getHotChallenges,
 } from '@/components/canvas/challenge/challengeData'
 import type { Challenge } from '@/components/canvas/challenge/challengeTypes'
+import { eventPalette, rankMoveTone } from '@/components/canvas/team/teamEventVisuals'
 import type { CtfSnapshot } from '@/types/ctf'
 
 type PanelKind = 'rank' | 'timer' | 'solves' | 'donut' | 'line' | 'heat'
-type HudViewMode = 'realtime' | 'challenge'
+type HudViewMode = 'realtime' | 'challenge' | 'team'
+
+type HudTextureMotion = {
+  elapsed: number
+  eventProgress: number
+  rankProgress: number
+}
 
 type PanelConfig = {
   accent: string
@@ -97,12 +104,93 @@ const panels: PanelConfig[] = [
   },
 ]
 
+const teamPanels: PanelConfig[] = [
+  {
+    kind: 'rank',
+    accent: '#ffd21f',
+    width: 2.46,
+    height: 3.16,
+    arc: 0.44,
+    texture: [840, 1080],
+    position: [-4.38, 1.18, 0.48],
+    rotation: [-0.07, 0.54, -0.055],
+  },
+  {
+    kind: 'timer',
+    accent: '#ffd21f',
+    width: 5.7,
+    height: 0.92,
+    arc: 0.36,
+    texture: [1680, 310],
+    position: [0, 3.02, -0.56],
+    rotation: [0.16, 0, 0],
+  },
+  {
+    kind: 'solves',
+    accent: '#9bddff',
+    width: 2.58,
+    height: 3.16,
+    arc: 0.44,
+    texture: [900, 1080],
+    position: [4.38, 1.18, 0.48],
+    rotation: [-0.07, -0.54, 0.055],
+  },
+  {
+    kind: 'donut',
+    accent: '#ffe17c',
+    width: 2.34,
+    height: 1.38,
+    arc: 0.28,
+    texture: [860, 520],
+    position: [-3.42, -1.12, 1.56],
+    rotation: [-0.43, 0.28, 0.035],
+  },
+  {
+    kind: 'line',
+    accent: '#ffd21f',
+    width: 4.02,
+    height: 1.38,
+    arc: 0.29,
+    texture: [1360, 520],
+    position: [0, -1.14, 1.5],
+    rotation: [-0.44, 0, 0],
+  },
+  {
+    kind: 'heat',
+    accent: '#9bddff',
+    width: 2.64,
+    height: 1.38,
+    arc: 0.28,
+    texture: [980, 520],
+    position: [3.42, -1.12, 1.56],
+    rotation: [-0.43, -0.28, -0.035],
+  },
+]
+
 function setFont(ctx: CanvasRenderingContext2D, size: number, weight = 700) {
   ctx.font = `${weight} ${size}px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif`
 }
 
 function setMonoFont(ctx: CanvasRenderingContext2D, size: number, weight = 700) {
   ctx.font = `${weight} ${size}px "DIN Condensed", "Bahnschrift", "Arial Narrow", sans-serif`
+}
+
+function clamp01(value: number) {
+  return Math.min(1, Math.max(0, value))
+}
+
+function motionEase(value: number) {
+  const t = clamp01(value)
+  return t * t * t * (t * (t * 6 - 15) + 10)
+}
+
+function lerpNumber(from: number, to: number, progress: number) {
+  return from + (to - from) * progress
+}
+
+function latestSolveKey(snapshot: CtfSnapshot) {
+  const solve = snapshot.recentSolves[0]
+  return solve ? `${solve.time}:${solve.team}:${solve.challenge}:${solve.points}:${solve.eventTone ?? solve.badge ?? 'normal'}` : 'empty'
 }
 
 function panelPath(ctx: CanvasRenderingContext2D, width: number, height: number) {
@@ -662,6 +750,481 @@ function drawHeatPanel(
   ctx.textAlign = 'left'
 }
 
+function rankMoveLabel(rank: number, previousRank: number, score: number, previousScore: number) {
+  const delta = previousRank - rank
+  if (delta > 0) return `↑${delta}`
+  if (delta < 0) return `↓${Math.abs(delta)}`
+  if (score > previousScore) return `+${score - previousScore}`
+  return '-'
+}
+
+function rankMoveColor(rank: number, previousRank: number, score: number, previousScore: number) {
+  return rankMoveTone(rank, previousRank, score, previousScore)
+}
+
+function teamRankColor(rank: number) {
+  if (rank === 1) return '#ffd21f'
+  if (rank === 2) return '#dce9ef'
+  if (rank === 3) return '#ff8a36'
+  if (rank <= 10) return '#69f6ff'
+  return '#8fa4ac'
+}
+
+function drawTeamRankPanel(
+  ctx: CanvasRenderingContext2D,
+  snapshot: CtfSnapshot,
+  width: number,
+  height: number,
+  accent: string,
+  motion?: HudTextureMotion,
+) {
+  drawPanelBase(ctx, width, height, '实时排行榜', 'TEAM ORBIT TOP 10', accent)
+  const left = 58
+  const top = 124
+  const columns = [left, left + 92, width - 274, width - 166, width - 72]
+  const rankProgress = motionEase(motion?.rankProgress ?? 1)
+  ctx.fillStyle = 'rgba(203, 216, 221, 0.7)'
+  setFont(ctx, 21, 800)
+  ;['排名', '战队', '得分', '变化', '一血'].forEach((label, index) => {
+    ctx.textAlign = index >= 2 ? 'right' : 'left'
+    ctx.fillText(label, columns[index], top)
+  })
+  ctx.textAlign = 'left'
+
+  snapshot.topTeams
+    .filter((team) => team.rank <= 10 || team.previousRank <= 10)
+    .slice(0, 12)
+    .sort((leftTeam, rightTeam) => {
+      const leftPromoted = leftTeam.rank < leftTeam.previousRank ? 1 : 0
+      const rightPromoted = rightTeam.rank < rightTeam.previousRank ? 1 : 0
+      return leftPromoted - rightPromoted
+    })
+    .forEach((team) => {
+    const startIndex = Math.min(Math.max(team.previousRank, 1), 11) - 1
+    const endIndex = Math.min(Math.max(team.rank, 1), 11) - 1
+    const rowIndex = lerpNumber(startIndex, endIndex, rankProgress)
+    const y = top + 54 + rowIndex * 78
+    const rowVisible = y > top + 28 && y < height - 42
+    if (!rowVisible) return
+    const tone = teamRankColor(team.rank)
+    const rowAlpha = team.rank <= 10 ? 1 : 1 - rankProgress
+    const score = Math.round(lerpNumber(team.previousScore, team.score, rankProgress))
+    const rankLabel = rankProgress < 0.48 ? team.previousRank : team.rank
+    const promoted = team.rank < team.previousRank
+    const demoted = team.rank > team.previousRank
+
+    ctx.save()
+    ctx.globalAlpha = rowAlpha
+    if (promoted || demoted) {
+      const moveTone = rankMoveColor(team.rank, team.previousRank, team.score, team.previousScore)
+      ctx.fillStyle = promoted ? 'rgba(255, 210, 31, 0.08)' : 'rgba(126, 189, 255, 0.055)'
+      ctx.fillRect(left - 26, y - 28, width - left - 22, 58)
+      ctx.strokeStyle = moveTone
+      ctx.globalAlpha = rowAlpha * (0.22 + Math.sin(rankProgress * Math.PI) * 0.38)
+      ctx.strokeRect(left - 28, y - 31, width - left - 18, 64)
+      ctx.globalAlpha = rowAlpha
+    }
+    ctx.strokeStyle = 'rgba(226, 242, 247, 0.13)'
+    ctx.beginPath()
+    ctx.moveTo(left - 18, y + 39)
+    ctx.lineTo(width - 56, y + 39)
+    ctx.stroke()
+
+    if (team.rank <= 3) {
+      drawHex(ctx, columns[0] + 23, y + 5, 26, tone, ['01', '02', '03'][team.rank - 1])
+    } else {
+      ctx.fillStyle = '#f4fbff'
+      setMonoFont(ctx, 30, 900)
+      ctx.textAlign = 'center'
+      ctx.fillText(String(rankLabel).padStart(2, '0'), columns[0] + 22, y + 16)
+      ctx.textAlign = 'left'
+    }
+
+    ctx.fillStyle = '#f7fbff'
+    setFont(ctx, 29, 900)
+    ctx.fillText(team.name, columns[1], y + 15)
+    ctx.fillStyle = 'rgba(203, 216, 221, 0.7)'
+    setMonoFont(ctx, 18, 800)
+    ctx.fillText(`${team.topCategory.toUpperCase()} / ${team.solves} SOLVES`, columns[1], y + 42)
+
+    ctx.textAlign = 'right'
+    ctx.fillStyle = tone
+    setMonoFont(ctx, 32, 900)
+    ctx.fillText(String(score), columns[2], y + 15)
+    ctx.fillStyle = rankMoveColor(team.rank, team.previousRank, team.score, team.previousScore)
+    setMonoFont(ctx, 25, 900)
+    ctx.fillText(rankMoveLabel(team.rank, team.previousRank, team.score, team.previousScore), columns[3], y + 15)
+    ctx.fillStyle = '#f4fbff'
+    setMonoFont(ctx, 25, 900)
+    ctx.fillText(String(team.firstBloods), columns[4], y + 15)
+    ctx.textAlign = 'left'
+    ctx.restore()
+  })
+}
+
+function drawTeamSummaryPanel(
+  ctx: CanvasRenderingContext2D,
+  snapshot: CtfSnapshot,
+  width: number,
+  height: number,
+  accent: string,
+  motion?: HudTextureMotion,
+) {
+  drawPanelBase(ctx, width, height, '', '', accent)
+  ctx.clearRect(0, 0, width, 84)
+  const leader = snapshot.topTeams[0]
+  const second = snapshot.topTeams[1]
+  const leadGap = leader && second ? leader.score - second.score : 0
+  const previousLeader = snapshot.topTeams.find((team) => team.previousRank === 1 && team.teamId !== leader?.teamId)
+  const newLeader = Boolean(leader && leader.previousRank !== 1)
+  const totalFirstBloods = snapshot.topTeams.reduce((sum, team) => sum + team.firstBloods, 0)
+
+  ctx.strokeStyle = accent
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.moveTo(width * 0.08, 34)
+  ctx.lineTo(width * 0.92, 34)
+  ctx.stroke()
+
+  ctx.fillStyle = '#dbe4e8'
+  setFont(ctx, 32, 900)
+  ctx.fillText('战队视图', 130, 120)
+  ctx.fillStyle = '#f4f7f8'
+  setMonoFont(ctx, 84, 900)
+  ctx.fillText('TEAM RANK ORBIT', 130, 206)
+
+  const metrics = [
+    ['TEAMS', snapshot.totalTeams, '#f4fbff'],
+    ['TOP SCORE', leader?.score ?? 0, '#ffd21f'],
+    ['LEAD GAP', leadGap, '#69f6ff'],
+    ['FIRST BLOOD', totalFirstBloods, '#b46cff'],
+  ] as const
+
+  metrics.forEach(([label, value, color], index) => {
+    const x = width - 720 + index * 170
+    ctx.fillStyle = color
+    setMonoFont(ctx, 56, 900)
+    ctx.textAlign = 'center'
+    ctx.fillText(String(value), x, 150)
+    ctx.fillStyle = 'rgba(205, 216, 220, 0.74)'
+    setMonoFont(ctx, 20, 800)
+    ctx.fillText(label, x, 188)
+  })
+  ctx.textAlign = 'left'
+
+  if (newLeader && leader) {
+    const flash = Math.sin(motionEase(Math.min((motion?.elapsed ?? 2) / 0.86, 1)) * Math.PI)
+    const alpha = 0.72 + flash * 0.28
+    ctx.save()
+    ctx.globalAlpha = alpha
+    const bannerX = width / 2 - 238
+    const bannerY = 210
+    const bannerW = 476
+    const bannerH = 70
+    const glow = ctx.createLinearGradient(bannerX, bannerY, bannerX + bannerW, bannerY)
+    glow.addColorStop(0, 'rgba(255, 210, 31, 0)')
+    glow.addColorStop(0.5, 'rgba(255, 210, 31, 0.32)')
+    glow.addColorStop(1, 'rgba(105, 246, 255, 0)')
+    ctx.fillStyle = glow
+    ctx.fillRect(bannerX - 90, bannerY - 8, bannerW + 180, bannerH + 16)
+    ctx.strokeStyle = '#ffd21f'
+    ctx.lineWidth = 2
+    ctx.strokeRect(bannerX, bannerY, bannerW, bannerH)
+    ctx.fillStyle = '#ffd21f'
+    setMonoFont(ctx, 30, 900)
+    ctx.textAlign = 'center'
+    ctx.fillText('NEW LEADER', bannerX + bannerW / 2, bannerY + 29)
+    ctx.fillStyle = '#f7fbff'
+    setFont(ctx, 25, 900)
+    ctx.fillText(`${previousLeader?.name ?? '---'} → ${leader.name}    领先分差 +${leadGap}`, bannerX + bannerW / 2, bannerY + 56)
+    ctx.textAlign = 'left'
+    ctx.restore()
+  }
+}
+
+function drawTeamSolvesPanel(
+  ctx: CanvasRenderingContext2D,
+  snapshot: CtfSnapshot,
+  width: number,
+  height: number,
+  accent: string,
+  motion?: HudTextureMotion,
+) {
+  drawPanelBase(ctx, width, height, '最新突破动态', 'TEAM BREAKTHROUGH FEED', accent)
+  ctx.fillStyle = 'rgba(203, 216, 221, 0.7)'
+  setFont(ctx, 22, 800)
+  ctx.textAlign = 'right'
+  ctx.fillText('实时更新  >', width - 66, 62)
+  ctx.textAlign = 'left'
+
+  const lineX = 82
+  ctx.strokeStyle = 'rgba(155, 221, 255, 0.6)'
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.moveTo(lineX, 118)
+  ctx.lineTo(lineX, height - 58)
+  ctx.stroke()
+
+  snapshot.recentSolves.slice(0, 9).forEach((solve, index) => {
+    const firstBlood = solve.badge === 'FIRST BLOOD' || solve.eventTone === 'firstBlood'
+    const toneKey = firstBlood ? 'firstBlood' : solve.eventTone ?? 'normal'
+    const palette = eventPalette(toneKey)
+    const intro = index === 0 ? motionEase(motion?.eventProgress ?? 1) : 1
+    const flash = index === 0 ? Math.sin(motionEase(Math.min((motion?.elapsed ?? 2) / 0.62, 1)) * Math.PI) : 0
+    const y = 146 + index * 92 - (index === 0 ? (1 - intro) * 78 : 0)
+    const rowAlpha = index === 0 ? 0.36 + intro * 0.64 : index > 6 ? 0.78 : 1
+    const cardX = 120
+    const cardY = y - 36
+    const cardW = width - 178
+    const cardH = 72
+
+    if (y < 104 || cardY > height - 62) return
+
+    ctx.save()
+    ctx.globalAlpha = rowAlpha
+    ctx.fillStyle = firstBlood ? 'rgba(180, 108, 255, 0.09)' : toneKey === 'highValue' ? 'rgba(255, 210, 31, 0.075)' : toneKey === 'breakthrough' ? 'rgba(255, 120, 68, 0.07)' : 'rgba(105, 246, 255, 0.045)'
+    ctx.beginPath()
+    ctx.roundRect(cardX, cardY, cardW, cardH, 8)
+    ctx.fill()
+
+    const rail = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardH)
+    rail.addColorStop(0, palette.start)
+    rail.addColorStop(1, palette.end)
+    ctx.fillStyle = rail
+    ctx.fillRect(cardX, cardY + 8, 5, cardH - 16)
+
+    ctx.save()
+    ctx.shadowColor = palette.border
+    ctx.shadowBlur = flash ? 24 : firstBlood ? 12 : 0
+    ctx.strokeStyle = flash ? palette.border : firstBlood ? '#b46cff' : 'rgba(226, 242, 247, 0.16)'
+    ctx.lineWidth = flash ? 3 : firstBlood ? 2 : 1
+    ctx.beginPath()
+    ctx.roundRect(cardX, cardY, cardW, cardH, 8)
+    ctx.stroke()
+    ctx.restore()
+
+    ctx.fillStyle = palette.accent
+    ctx.beginPath()
+    ctx.arc(lineX, y, firstBlood ? 11 : 8, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = firstBlood ? '#ffd21f' : 'rgba(226, 242, 247, 0.14)'
+    ctx.lineWidth = firstBlood ? 2 : 1
+    ctx.beginPath()
+    ctx.moveTo(126, y + 43)
+    ctx.lineTo(width - 60, y + 43)
+    ctx.stroke()
+
+    ctx.fillStyle = '#dce7eb'
+    setMonoFont(ctx, 22, 700)
+    ctx.fillText(solve.time, 102, y + 8)
+
+    ctx.strokeStyle = firstBlood ? palette.border : palette.accent
+    ctx.strokeRect(214, y - 23, 78, 46)
+    ctx.fillStyle = firstBlood ? palette.border : palette.accent
+    setMonoFont(ctx, 13, 900)
+    ctx.textAlign = 'center'
+    ctx.fillText(palette.label, 253, y - 4)
+    ctx.fillText(firstBlood ? 'BLOOD' : 'EVENT', 253, y + 13)
+    ctx.textAlign = 'left'
+    if (firstBlood) {
+      ctx.strokeStyle = palette.accent
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(300, y - 22)
+      ctx.lineTo(288, y - 2)
+      ctx.lineTo(304, y - 2)
+      ctx.lineTo(292, y + 22)
+      ctx.stroke()
+    }
+
+    ctx.fillStyle = '#f7fbff'
+    setFont(ctx, 31, 900)
+    ctx.fillText(solve.team, 322, y - 7)
+    ctx.fillStyle = '#b7c4ca'
+    setFont(ctx, 21, 600)
+    ctx.fillText(`解出  ${solve.category}  |  ${solve.challenge}`, 322, y + 26)
+    ctx.fillStyle = '#ffd21f'
+    setMonoFont(ctx, 34, 900)
+    ctx.textAlign = 'right'
+    ctx.fillText(`+${solve.points}`, width - 60, y + 11)
+    ctx.textAlign = 'left'
+    ctx.restore()
+  })
+}
+
+function drawTeamCategoryPanel(
+  ctx: CanvasRenderingContext2D,
+  snapshot: CtfSnapshot,
+  width: number,
+  height: number,
+  accent: string,
+) {
+  drawPanelBase(ctx, width, height, '战队强项分布', 'TOP TEAM CATEGORY', accent)
+  const categoryCounts = snapshot.categories.map((category) => ({
+    ...category,
+    solved: snapshot.topTeams.filter((team) => team.topCategory === category.name).length,
+  }))
+  const total = Math.max(categoryCounts.reduce((sum, category) => sum + category.solved, 0), 1)
+  const centerX = 228
+  const centerY = 288
+  let cursor = -Math.PI / 2
+  categoryCounts.forEach((category) => {
+    const angle = (category.solved / total) * Math.PI * 2
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, 132, cursor, cursor + angle)
+    ctx.lineWidth = 54
+    ctx.strokeStyle = category.color
+    ctx.stroke()
+    cursor += angle
+  })
+  ctx.fillStyle = '#071014'
+  ctx.beginPath()
+  ctx.arc(centerX, centerY, 72, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#fff'
+  setMonoFont(ctx, 58, 900)
+  ctx.textAlign = 'center'
+  ctx.fillText(String(snapshot.topTeams.length), centerX, centerY + 6)
+  ctx.fillStyle = '#c5d0d5'
+  setFont(ctx, 20, 700)
+  ctx.fillText('TOP TEAMS', centerX, centerY + 45)
+  ctx.textAlign = 'left'
+
+  categoryCounts.forEach((category, index) => {
+    const x = 450
+    const y = 174 + index * 52
+    ctx.fillStyle = category.color
+    ctx.fillRect(x, y - 13, 17, 17)
+    ctx.fillStyle = '#eff6f8'
+    setFont(ctx, 25, 700)
+    ctx.fillText(category.name, x + 34, y + 2)
+    ctx.fillStyle = '#ffe17c'
+    setMonoFont(ctx, 26, 900)
+    ctx.fillText(String(category.solved), x + 198, y + 2)
+    ctx.fillStyle = '#c3cdd2'
+    setMonoFont(ctx, 21, 700)
+    ctx.fillText(`${Math.round((category.solved / total) * 100)}%`, x + 243, y + 2)
+  })
+}
+
+function drawTeamScorePanel(
+  ctx: CanvasRenderingContext2D,
+  snapshot: CtfSnapshot,
+  width: number,
+  height: number,
+  accent: string,
+) {
+  drawPanelBase(ctx, width, height, '得分趋势（实时）', 'TOP TEAM SCORE CURVES', accent)
+  const chart = { x: 116, y: 126, w: width - 250, h: height - 190 }
+  const teams = snapshot.topTeams.slice(0, 8)
+  const max = Math.max(...teams.map((team) => team.score), 1)
+
+  ctx.strokeStyle = 'rgba(226, 242, 247, 0.14)'
+  ctx.lineWidth = 1
+  setMonoFont(ctx, 20, 700)
+  ctx.fillStyle = 'rgba(205, 216, 220, 0.68)'
+  for (let i = 0; i <= 4; i += 1) {
+    const y = chart.y + (chart.h / 4) * i
+    ctx.beginPath()
+    ctx.moveTo(chart.x, y)
+    ctx.lineTo(chart.x + chart.w, y)
+    ctx.stroke()
+    ctx.fillText(String(Math.round(max - (max / 4) * i)), 48, y + 7)
+  }
+
+  teams.forEach((team, teamIndex) => {
+    const tone = teamRankColor(team.rank)
+    const points = Array.from({ length: 9 }, (_, index) => {
+      const u = index / 8
+      const wobble = Math.sin(index * 1.7 + teamIndex) * 0.02
+      const score = Math.max(0, team.previousScore * (0.72 + u * 0.28 + wobble) + (team.score - team.previousScore) * u)
+      const x = chart.x + u * chart.w
+      const y = chart.y + chart.h - (score / max) * chart.h
+      return [x, y] as const
+    })
+
+    ctx.beginPath()
+    points.forEach(([x, y], index) => {
+      if (index === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    })
+    ctx.strokeStyle = tone
+    ctx.lineWidth = team.rank <= 3 ? 5 : 3
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.stroke()
+
+    const [lastX, lastY] = points[points.length - 1]
+    ctx.fillStyle = tone
+    ctx.beginPath()
+    ctx.arc(lastX, lastY, team.rank <= 3 ? 8 : 5, 0, Math.PI * 2)
+    ctx.fill()
+
+    const legendX = width - 174
+    const legendY = 116 + teamIndex * 42
+    ctx.fillStyle = tone
+    ctx.fillRect(legendX, legendY - 10, 18, 5)
+    ctx.fillStyle = '#f4fbff'
+    setFont(ctx, 20, 900)
+    ctx.fillText(team.name, legendX + 28, legendY)
+    ctx.fillStyle = tone
+    setMonoFont(ctx, 22, 900)
+    ctx.textAlign = 'right'
+    ctx.fillText(String(team.score), width - 58, legendY)
+    ctx.textAlign = 'left'
+  })
+}
+
+function drawTeamHeatPanel(
+  ctx: CanvasRenderingContext2D,
+  snapshot: CtfSnapshot,
+  width: number,
+  height: number,
+  accent: string,
+) {
+  drawPanelBase(ctx, width, height, '战队活跃度热力图', 'LAST 60 MINUTES', accent)
+  ctx.fillStyle = '#cfd9dd'
+  setFont(ctx, 19, 700)
+  ctx.fillText('低', width - 276, 61)
+  const grad = ctx.createLinearGradient(width - 228, 0, width - 72, 0)
+  grad.addColorStop(0, 'rgba(108, 122, 132, 0.58)')
+  grad.addColorStop(0.55, '#69f6ff')
+  grad.addColorStop(1, '#ffd21f')
+  ctx.fillStyle = grad
+  ctx.fillRect(width - 228, 45, 150, 12)
+  ctx.fillStyle = '#cfd9dd'
+  ctx.fillText('高', width - 58, 61)
+
+  const startX = 202
+  const startY = 132
+  const cellW = 48
+  const cellH = 27
+  const gap = 8
+  snapshot.activity.slice(0, 8).forEach((row, rowIndex) => {
+    const y = startY + rowIndex * (cellH + 18)
+    ctx.fillStyle = '#f4f9fb'
+    setFont(ctx, 20, 800)
+    ctx.fillText(row.team, 42, y + 20)
+    row.buckets.forEach((bucket, index) => {
+      const x = startX + index * (cellW + gap)
+      const alpha = bucket >= 0.42 ? 0.24 + bucket * 0.66 : 0.18 + bucket * 0.62
+      ctx.fillStyle = bucket >= 0.42 ? `rgba(246, 210, 82, ${alpha})` : `rgba(105, 246, 255, ${alpha * 0.58})`
+      ctx.fillRect(x, y, cellW, cellH)
+      ctx.strokeStyle = 'rgba(226, 242, 247, 0.1)'
+      ctx.lineWidth = 1
+      ctx.strokeRect(x, y, cellW, cellH)
+    })
+  })
+
+  ctx.fillStyle = 'rgba(205, 216, 220, 0.68)'
+  setMonoFont(ctx, 18, 700)
+  snapshot.heatmapTicks.forEach((tick, index) => {
+    ctx.textAlign = 'center'
+    ctx.fillText(tick, startX + index * 104, height - 36)
+  })
+  ctx.textAlign = 'left'
+}
+
 function drawChallengeCategoryPanel(ctx: CanvasRenderingContext2D, width: number, height: number, accent: string) {
   drawPanelBase(ctx, width, height, '分类统计', 'CHALLENGE CATEGORIES', accent)
   const stats = getChallengeCategoryStats()
@@ -954,6 +1517,56 @@ function drawChallengeTexture(
   return canvas
 }
 
+function drawTeamTextureToContext(
+  ctx: CanvasRenderingContext2D,
+  kind: PanelKind,
+  snapshot: CtfSnapshot,
+  width: number,
+  height: number,
+  accent: string,
+  motion?: HudTextureMotion,
+) {
+  switch (kind) {
+    case 'rank':
+      drawTeamRankPanel(ctx, snapshot, width, height, accent, motion)
+      break
+    case 'timer':
+      drawTeamSummaryPanel(ctx, snapshot, width, height, accent, motion)
+      break
+    case 'solves':
+      drawTeamSolvesPanel(ctx, snapshot, width, height, accent, motion)
+      break
+    case 'donut':
+      drawTeamCategoryPanel(ctx, snapshot, width, height, accent)
+      break
+    case 'line':
+      drawTeamScorePanel(ctx, snapshot, width, height, accent)
+      break
+    case 'heat':
+      drawTeamHeatPanel(ctx, snapshot, width, height, accent)
+      break
+  }
+}
+
+function drawTeamTexture(
+  kind: PanelKind,
+  snapshot: CtfSnapshot,
+  width: number,
+  height: number,
+  accent: string,
+  motion?: HudTextureMotion,
+) {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return canvas
+  ctx.imageSmoothingEnabled = true
+  drawTeamTextureToContext(ctx, kind, snapshot, width, height, accent, motion)
+
+  return canvas
+}
+
 function drawTexture(
   kind: PanelKind,
   snapshot: CtfSnapshot,
@@ -965,6 +1578,9 @@ function drawTexture(
 ) {
   if (viewMode === 'challenge') {
     return drawChallengeTexture(kind, selectedChallenge, width, height, accent)
+  }
+  if (viewMode === 'team') {
+    return drawTeamTexture(kind, snapshot, width, height, accent)
   }
 
   const canvas = document.createElement('canvas')
@@ -1066,6 +1682,20 @@ function usePanelTexture(
   return texture
 }
 
+function redrawTeamPanelTexture(
+  texture: CanvasTexture,
+  config: PanelConfig,
+  snapshot: CtfSnapshot,
+  motion: HudTextureMotion,
+) {
+  const canvas = texture.image as HTMLCanvasElement
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.imageSmoothingEnabled = true
+  drawTeamTextureToContext(ctx, config.kind, snapshot, config.texture[0], config.texture[1], config.accent, motion)
+  texture.needsUpdate = true
+}
+
 function HudPanelMesh({
   config,
   dimmed,
@@ -1084,7 +1714,9 @@ function HudPanelMesh({
   const group = useRef<Group>(null)
   const mainMaterial = useRef<MeshBasicMaterial>(null)
   const opacity = useRef(1)
+  const textureMotion = useRef({ key: '', pending: false, startedAt: -10 })
   const texture = usePanelTexture(config, snapshot, viewMode, selectedChallenge)
+  const solveKey = viewMode === 'team' ? latestSolveKey(snapshot) : 'idle'
   const geometry = useMemo(
     () => makeCurvedGeometry(config.width, config.height, config.arc),
     [config.arc, config.height, config.width],
@@ -1092,7 +1724,29 @@ function HudPanelMesh({
 
   useEffect(() => () => geometry.dispose(), [geometry])
 
+  useEffect(() => {
+    if (viewMode !== 'team') return
+    if (textureMotion.current.key === solveKey) return
+    textureMotion.current.key = solveKey
+    textureMotion.current.pending = true
+  }, [solveKey, viewMode])
+
   useFrame((state) => {
+    if (textureMotion.current.pending) {
+      textureMotion.current.pending = false
+      textureMotion.current.startedAt = state.clock.elapsedTime
+    }
+    if (viewMode === 'team' && (config.kind === 'rank' || config.kind === 'solves' || config.kind === 'timer')) {
+      const elapsed = Math.max(0, state.clock.elapsedTime - textureMotion.current.startedAt)
+      if (elapsed < 2.2) {
+        redrawTeamPanelTexture(texture, config, snapshot, {
+          elapsed,
+          eventProgress: clamp01(elapsed / 0.82),
+          rankProgress: clamp01((elapsed - 0.18) / 1.24),
+        })
+      }
+    }
+
     opacity.current += ((dimmed ? 0.12 : 1) - opacity.current) * 0.08
     if (mainMaterial.current) mainMaterial.current.opacity = 0.94 * opacity.current
 
@@ -1191,10 +1845,12 @@ export function HudPanelMeshes({
   snapshot: CtfSnapshot
   viewMode?: HudViewMode
 }) {
+  const activePanels = viewMode === 'team' ? teamPanels : panels
+
   return (
     <group>
       <CurvedShell />
-      {panels.map((panel, index) => (
+      {activePanels.map((panel, index) => (
         <HudPanelMesh
           key={panel.kind}
           config={panel}

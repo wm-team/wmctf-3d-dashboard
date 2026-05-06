@@ -1,13 +1,22 @@
 export type TeamRank = {
+  firstBloods: number
+  previousRank: number
+  previousScore: number
+  previousSolved: number
   rank: number
   name: string
   score: number
   solves: number
+  teamId: string
+  topCategory: string
 }
 
 export type SolveEvent = {
+  eventTone?: 'normal' | 'firstBlood' | 'highValue' | 'breakthrough'
+  rankDelta?: number
   time: string
   team: string
+  teamId?: string
   category: string
   challenge: string
   points: number

@@ -41,91 +41,41 @@ function useGeometryMap(url: string) {
 }
 
 export function ChallengeCoreShell({ intensity = 1 }: { intensity?: number }) {
-  const geometries = useGeometryMap(challengeVisualConfig.assets.coreShell)
+  const gltf = useGLTF(challengeVisualConfig.assets.coreShell) as GltfScene
   const shell = useRef<Group>(null)
-  const outer = geometries.get('CoreOuterRing')
-  const inner = geometries.get('CoreInnerRing')
-  const cage = geometries.get('CoreOctaCage')
-  const crownTop = geometries.get('CoreCrownTop')
-  const crownBottom = geometries.get('CoreCrownBottom')
+  const coreScene = useMemo(() => {
+    const clone = gltf.scene.clone(true)
+
+    clone.traverse((object) => {
+      const mesh = object as Mesh
+      if (!mesh.isMesh) return
+
+      mesh.raycast = () => undefined
+      mesh.renderOrder = 20
+      if (Array.isArray(mesh.material)) {
+        mesh.material = mesh.material.map((material) => material.clone())
+      } else {
+        mesh.material = mesh.material.clone()
+      }
+    })
+
+    return clone
+  }, [gltf.scene])
 
   useFrame((state) => {
     if (!shell.current) return
     const elapsed = state.clock.elapsedTime
     shell.current.rotation.y = elapsed * -0.08
+    shell.current.position.y = Math.sin(elapsed * 0.74) * 0.014
     shell.current.scale.setScalar(
       challengeVisualConfig.core.shellScale +
         Math.sin(elapsed * 0.86) * challengeVisualConfig.core.shellPulse * intensity,
     )
   })
 
-  if (!outer || !inner || !cage || !crownTop || !crownBottom) return null
-
   return (
     <group ref={shell} raycast={() => undefined}>
-      <mesh geometry={outer} renderOrder={20}>
-        <meshStandardMaterial
-          color="#69f6ff"
-          emissive="#69f6ff"
-          emissiveIntensity={0.62 * intensity}
-          metalness={0.58}
-          roughness={0.24}
-          transparent
-          opacity={0.46}
-          blending={AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh geometry={inner} rotation={[Math.PI / 2, 0, Math.PI / 9]} renderOrder={21}>
-        <meshStandardMaterial
-          color="#ffd21f"
-          emissive="#ffd21f"
-          emissiveIntensity={0.48 * intensity}
-          metalness={0.52}
-          roughness={0.28}
-          transparent
-          opacity={0.34}
-          blending={AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh geometry={cage} renderOrder={22}>
-        <meshStandardMaterial
-          color="#9bddff"
-          emissive="#69f6ff"
-          emissiveIntensity={0.28 * intensity}
-          metalness={0.42}
-          roughness={0.32}
-          transparent
-          opacity={0.24}
-          side={DoubleSide}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh geometry={crownTop} renderOrder={23}>
-        <meshStandardMaterial
-          color="#f4f8ff"
-          emissive="#9bddff"
-          emissiveIntensity={0.34 * intensity}
-          metalness={0.44}
-          roughness={0.3}
-          transparent
-          opacity={0.42}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh geometry={crownBottom} renderOrder={23}>
-        <meshStandardMaterial
-          color="#f4f8ff"
-          emissive="#9bddff"
-          emissiveIntensity={0.28 * intensity}
-          metalness={0.44}
-          roughness={0.3}
-          transparent
-          opacity={0.36}
-          depthWrite={false}
-        />
-      </mesh>
+      <primitive object={coreScene} />
     </group>
   )
 }

@@ -1,22 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Billboard, Text } from '@react-three/drei'
+import { Billboard, Text, useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import {
   AdditiveBlending,
+  Box3,
+  BoxGeometry,
   Color,
   CylinderGeometry,
   DoubleSide,
   MathUtils,
   MeshBasicMaterial,
   MeshStandardMaterial,
-  OctahedronGeometry,
   PlaneGeometry,
   PointsMaterial,
   RingGeometry,
   ShaderMaterial,
   TorusGeometry,
+  Vector3,
   type Group,
   type Mesh,
+  type Object3D,
 } from 'three'
 import { COLORS } from '../core/coreSceneConfig'
 import { getCategoryMeta, getChallengePosition } from './challengeData'
@@ -71,6 +74,7 @@ function applyOpacity(group: Group, opacity: number) {
 
 type ChallengeNodeGeometrySet = {
   baseDisc: CylinderGeometry
+  baseTick: BoxGeometry
   beamPlane: PlaneGeometry
   beamShell: CylinderGeometry
   categoryRim: TorusGeometry
@@ -84,8 +88,13 @@ type ChallengeNodeGeometrySet = {
   statusRing: TorusGeometry
   lockedSeal: TorusGeometry
   pulseRing: RingGeometry
-  topSparkle: OctahedronGeometry
 }
+
+type GltfScene = {
+  scene: Group
+}
+
+type StatusCrownVariant = ChallengeStatus | 'firstBlood'
 
 const statusVisual = {
   hot: { color: COLORS.yellow, glyph: 'HOT' },
@@ -93,6 +102,23 @@ const statusVisual = {
   solved: { color: '#36ff8c', glyph: 'OK' },
   unsolved: { color: '#ff7a45', glyph: 'OPEN' },
 } as const
+
+const statusShaderIndex: Record<ChallengeStatus, number> = {
+  hot: 1,
+  locked: 3,
+  solved: 0,
+  unsolved: 2,
+}
+
+const difficultyBaseSegmentCount = [1, 2, 4, 8]
+
+const statusCrownNodeNames: Record<StatusCrownVariant, string> = {
+  firstBlood: 'StatusCrownFirstBlood',
+  hot: 'StatusCrownHot',
+  locked: 'StatusCrownLocked',
+  solved: 'StatusCrownSolved',
+  unsolved: 'StatusCrownUnsolved',
+}
 
 const baseGlowVertex = `
 varying vec2 vUv;
@@ -105,6 +131,7 @@ void main() {
 const baseGlowFragment = `
 varying vec2 vUv;
 uniform float uTime;
+uniform float uDifficulty;
 uniform float uOpacity;
 uniform vec3 uColor;
 
@@ -113,12 +140,112 @@ void main() {
   float r = length(p);
   float a = atan(p.y, p.x);
   float core = pow(max(0.0, 1.0 - r), 2.0);
-  float ring = 1.0 - smoothstep(0.025, 0.06, abs(r - 0.48));
-  float scan = pow(max(0.0, cos(a * 6.0 + uTime * 0.7)), 16.0) * smoothstep(0.2, 0.8, r);
-  float alpha = (core * 0.36 + ring * 0.5 + scan * 0.28) * (1.0 - smoothstep(0.84, 1.0, r)) * uOpacity;
+  float ring = 1.0 - smoothstep(0.025, 0.06, abs(r - (0.42 + uDifficulty * 0.045)));
+  float ticks = pow(max(0.0, cos(a * (6.0 + uDifficulty * 2.0) + uTime * (0.55 + uDifficulty * 0.11))), 18.0) * smoothstep(0.24, 0.82, r);
+  float alpha = (core * 0.28 + ring * 0.54 + ticks * 0.34) * (1.0 - smoothstep(0.84, 1.0, r)) * uOpacity;
   gl_FragColor = vec4(uColor, alpha);
 }
 `
+
+const dataBeamVertex = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`
+
+const dataBeamFragment = `
+varying vec2 vUv;
+uniform float uDifficulty;
+uniform float uOpacity;
+uniform float uStatus;
+uniform float uTime;
+uniform vec3 uColor;
+
+void main() {
+  float vertical = clamp(vUv.y, 0.0, 1.0);
+  float radial = abs(vUv.x - 0.5) * 2.0;
+  float edgeFade = 1.0 - smoothstep(0.74, 1.0, radial);
+  float liftSpeed = mix(0.38, 1.18, step(0.5, uStatus)) + uDifficulty * 0.09;
+  float packet = smoothstep(0.92, 1.0, fract(vertical * (4.0 + uDifficulty) - uTime * liftSpeed + uStatus * 0.17));
+  float lane = pow(max(0.0, cos((vUv.x - 0.5) * 18.0 + uTime * 0.7)), 10.0);
+  float scan = smoothstep(0.0, 0.09, 1.0 - abs(fract(vertical * 2.6 - uTime * 0.16) - 0.5) * 2.0);
+  float hotSpark = step(0.5, uStatus) * (1.0 - step(1.5, uStatus)) * pow(max(0.0, sin(vertical * 46.0 - uTime * 9.5)), 16.0);
+  float lockedGrid = step(2.5, uStatus) * (step(0.83, abs(sin(vertical * 32.0))) + step(0.9, abs(cos(vUv.x * 28.0))));
+  float solvedStability = 1.0 - step(0.5, uStatus);
+  float unsolvedScan = step(1.5, uStatus) * (1.0 - step(2.5, uStatus)) * scan;
+  float body = 0.18 + lane * 0.18 + packet * (0.42 + uDifficulty * 0.08) + hotSpark * 0.42 + solvedStability * 0.16 + unsolvedScan * 0.28;
+  body *= 1.0 - lockedGrid * 0.52;
+  float alpha = body * edgeFade * smoothstep(0.0, 0.13, vertical) * (1.0 - smoothstep(0.92, 1.0, vertical)) * uOpacity;
+  vec3 color = mix(uColor * 0.45, uColor, packet + hotSpark + solvedStability * 0.28);
+  color = mix(color, vec3(0.48, 0.58, 0.62), lockedGrid * 0.42);
+  gl_FragColor = vec4(color, alpha);
+}
+`
+
+function ChallengeStatusCrownModel({
+  position = [0, 0, 0],
+  scale = 1,
+  variant,
+}: {
+  position?: [number, number, number]
+  scale?: number
+  variant: StatusCrownVariant
+}) {
+  const wrapper = useRef<Group>(null)
+  const gltf = useGLTF(challengeVisualConfig.assets.statusCrowns) as GltfScene
+  const rotationSpeed = variant === 'hot' ? 1.05 : variant === 'locked' ? 0.14 : variant === 'firstBlood' ? 0.9 : 0.42
+  const model = useMemo<Object3D | null>(() => {
+    const source = gltf.scene.getObjectByName(statusCrownNodeNames[variant])
+    if (!source) return null
+
+    const clone = source.clone(true)
+    clone.traverse((object) => {
+      const mesh = object as Mesh
+      if (!mesh.isMesh || !mesh.material) return
+
+      mesh.raycast = () => undefined
+      mesh.renderOrder = variant === 'firstBlood' ? 26 : 24
+      const materials = Array.isArray(mesh.material) ? mesh.material.map((material) => material.clone()) : [mesh.material.clone()]
+      materials.forEach((material) => {
+        if (
+          material instanceof MeshBasicMaterial ||
+          material instanceof MeshStandardMaterial ||
+          material instanceof ShaderMaterial
+        ) {
+          material.transparent = true
+          material.depthWrite = false
+          material.blending = AdditiveBlending
+        }
+      })
+      mesh.material = Array.isArray(mesh.material) ? materials : materials[0]
+    })
+
+    const bounds = new Box3().setFromObject(clone)
+    if (!bounds.isEmpty()) {
+      const center = bounds.getCenter(new Vector3())
+      clone.position.x -= center.x
+      clone.position.y -= bounds.min.y
+      clone.position.z -= center.z
+    }
+
+    return clone
+  }, [gltf.scene, variant])
+
+  useFrame((state) => {
+    if (!wrapper.current) return
+    wrapper.current.rotation.y = state.clock.elapsedTime * rotationSpeed
+  })
+
+  if (!model) return null
+
+  return (
+    <group ref={wrapper} position={position} scale={scale} raycast={() => undefined}>
+      <primitive object={model} />
+    </group>
+  )
+}
 
 function ChallengeBeaconLabel({
   categoryAccent,
@@ -229,6 +356,8 @@ function ChallengeBeaconNode({
   const beam = useRef<Group>(null)
   const baseDisc = useRef<Mesh>(null)
   const beamShell = useRef<Mesh>(null)
+  const beamShellMaterial = useRef<ShaderMaterial>(null)
+  const beamPlaneMaterials = useRef<Array<ShaderMaterial | null>>([])
   const categoryRim = useRef<Mesh>(null)
   const coreLine = useRef<Mesh>(null)
   const difficultyBands = useRef<Array<Mesh | null>>([])
@@ -237,9 +366,10 @@ function ChallengeBeaconNode({
   const pedestalDisc = useRef<Mesh>(null)
   const baseGlow = useRef<Mesh>(null)
   const baseGlowMaterial = useRef<ShaderMaterial>(null)
+  const baseTicks = useRef<Array<Mesh | null>>([])
+  const statusCrown = useRef<Group>(null)
   const pulseRing = useRef<Mesh>(null)
   const scanBand = useRef<Mesh>(null)
-  const topSparkle = useRef<Mesh>(null)
   const meta = getCategoryMeta(challenge.category)
   const locked = challenge.status === 'locked'
   const hot = challenge.status === 'hot'
@@ -252,15 +382,27 @@ function ChallengeBeaconNode({
   const difficultyRank = challenge.difficulty === 'expert' ? 3 : challenge.difficulty === 'hard' ? 2 : challenge.difficulty === 'medium' ? 1 : 0
   const beamProfile = challengeVisualConfig.beam.status[challenge.status]
   const baseRadius = challengeVisualConfig.beam.baseRadiusByDifficulty[difficultyRank] ?? 0.86
+  const baseSegmentCount = difficultyBaseSegmentCount[difficultyRank] ?? 1
   const debugTriggerKey = forceSolveFxChallengeId === challenge.id && forceSolveFxNonce > 0 ? `debug-${forceSolveFxNonce}` : 'none'
   const solvedTriggerKey = challenge.recentSolvedAt ? `solve-${challenge.recentSolvedAt}` : 'idle'
   const baseGlowUniforms = useMemo(
     () => ({
+      uDifficulty: { value: difficultyRank },
       uTime: { value: 0 },
       uOpacity: { value: 0.16 },
       uColor: { value: new Color(color) },
     }),
-    [color],
+    [color, difficultyRank],
+  )
+  const dataBeamUniforms = useMemo(
+    () => ({
+      uDifficulty: { value: difficultyRank },
+      uOpacity: { value: Number(beamProfile.shellOpacity) },
+      uStatus: { value: statusShaderIndex[challenge.status] },
+      uTime: { value: 0 },
+      uColor: { value: new Color(beamColor) },
+    }),
+    [beamColor, beamProfile.shellOpacity, challenge.status, difficultyRank],
   )
 
   useFrame((state) => {
@@ -279,6 +421,17 @@ function ChallengeBeaconNode({
     group.current.scale.setScalar(MathUtils.lerp(group.current.scale.x, targetScale, 0.12))
     applyOpacity(group.current, opacity)
 
+    const dataBeamOpacity =
+      Math.max(0.035, beamProfile.shellOpacity + focusBoost * 0.08 + (hot ? pulse * 0.14 : 0)) * opacity
+    const dataBeamMaterials = [beamShellMaterial.current, ...beamPlaneMaterials.current]
+    dataBeamMaterials.forEach((material) => {
+      if (!material) return
+      material.uniforms.uTime.value = t
+      material.uniforms.uOpacity.value = dataBeamOpacity
+      material.uniforms.uDifficulty.value = difficultyRank
+      material.uniforms.uStatus.value = statusShaderIndex[challenge.status]
+      material.uniforms.uColor.value.set(beamColor)
+    })
     setDynamicOpacity(baseDisc.current, beamProfile.baseOpacity + focusBoost * 0.08 + (hot ? pulse * 0.08 : 0))
     setDynamicOpacity(pedestalDisc.current, locked ? 0.12 : 0.24 + focusBoost * 0.08)
     if (floorHalo.current) {
@@ -338,19 +491,26 @@ function ChallengeBeaconNode({
     })
     if (baseGlowMaterial.current) {
       baseGlowMaterial.current.uniforms.uTime.value = t
+      baseGlowMaterial.current.uniforms.uDifficulty.value = difficultyRank
       baseGlowMaterial.current.uniforms.uOpacity.value = Math.max(0.04, beamProfile.floorWave * 0.26 + statusBoost * 0.1 + focusBoost * 0.12)
     }
     if (baseGlow.current) baseGlow.current.scale.setScalar(baseRadius * (1.0 + pulse * (hot ? 0.12 : 0.035) + focusBoost * 0.16))
+    baseTicks.current.forEach((tick, index) => {
+      if (!tick) return
+      const phase = index / Math.max(baseSegmentCount, 1)
+      const activeTick = index < baseSegmentCount
+      tick.position.y = 0.162 + Math.sin(t * 1.25 + phase * Math.PI * 2) * (hot ? 0.006 : 0.002)
+      tick.rotation.y = (typeof tick.userData.baseAngle === 'number' ? tick.userData.baseAngle : 0) + t * (0.12 + difficultyRank * 0.035)
+      setDynamicOpacity(tick, activeTick && !locked ? 0.46 + difficultyRank * 0.055 + focusBoost * 0.12 + (hot ? pulse * 0.16 : 0) : 0.045)
+    })
     if (pulseRing.current) {
       const u = (t * (hot ? 0.95 : 0.42) + position[2]) % 1
       pulseRing.current.scale.setScalar(baseRadius * (0.86 + u * (hot ? 1.32 : 0.62)))
       setDynamicOpacity(pulseRing.current, (1 - u) * beamProfile.floorWave + focusBoost * 0.07)
     }
-    if (topSparkle.current) {
-      topSparkle.current.rotation.y = t * 0.8
-      topSparkle.current.position.y = height + 0.08 + pulse * 0.018 + cinematicBoost * 0.12
-      topSparkle.current.scale.setScalar(challengeVisualConfig.beam.crownScale * (firstBlood ? 1.28 : 1) * (1 + focusBoost * 0.18))
-      setDynamicOpacity(topSparkle.current, locked ? 0.06 : firstBlood ? 0.76 : 0.16 + focusBoost * 0.22)
+    if (statusCrown.current) {
+      statusCrown.current.position.y = height + 0.12 + pulse * (hot ? 0.034 : 0.012) + cinematicBoost * 0.12
+      statusCrown.current.scale.setScalar(1 + focusBoost * 0.14 + (hot ? pulse * 0.1 : 0))
     }
   })
 
@@ -423,6 +583,33 @@ function ChallengeBeaconNode({
       <mesh ref={difficultyHalo} geometry={geometries.difficultyHalo} rotation={[Math.PI / 2, 0, 0]} position={[0, 0.106, 0]} renderOrder={14} raycast={() => undefined}>
         <meshBasicMaterial color={beamColor} transparent opacity={0.16} blending={AdditiveBlending} depthWrite={false} />
       </mesh>
+      {Array.from({ length: 8 }).map((_, index) => {
+        const angle = index * (Math.PI / 4) + difficultyRank * 0.08
+        const radius = baseRadius * 0.34
+        return (
+          <mesh
+            key={`difficulty-base-${index}`}
+            ref={(mesh) => {
+              baseTicks.current[index] = mesh
+            }}
+            geometry={geometries.baseTick}
+            position={[Math.cos(angle) * radius, 0.162, Math.sin(angle) * radius]}
+            rotation={[0, -angle + Math.PI / 2, 0]}
+            scale={[0.088 + difficultyRank * 0.014, 0.018, 0.024]}
+            renderOrder={15}
+            raycast={() => undefined}
+            userData={{ baseAngle: -angle + Math.PI / 2 }}
+          >
+            <meshBasicMaterial
+              color={index < baseSegmentCount ? statusMeta.color : beamColor}
+              transparent
+              opacity={index < baseSegmentCount && !locked ? 0.42 : 0.045}
+              blending={AdditiveBlending}
+              depthWrite={false}
+            />
+          </mesh>
+        )
+      })}
       {challenge.status === 'solved' && (
         <mesh geometry={geometries.statusRing} rotation={[Math.PI / 2, 0, 0]} position={[0, 0.148, 0]} scale={baseRadius * 1.02} renderOrder={15} raycast={() => undefined}>
           <meshBasicMaterial color={statusMeta.color} transparent opacity={0.72} blending={AdditiveBlending} depthWrite={false} />
@@ -457,22 +644,28 @@ function ChallengeBeaconNode({
       </mesh>
       <group ref={beam} position={[0, height * 0.5, 0]}>
         <mesh ref={beamShell} geometry={geometries.beamShell} renderOrder={16} raycast={() => undefined}>
-          <meshBasicMaterial
-            color={beamColor}
+          <shaderMaterial
+            ref={beamShellMaterial}
+            vertexShader={dataBeamVertex}
+            fragmentShader={dataBeamFragment}
+            uniforms={dataBeamUniforms}
             transparent
-            opacity={beamProfile.shellOpacity}
             blending={AdditiveBlending}
             depthWrite={false}
             side={DoubleSide}
           />
         </mesh>
-        {[0, Math.PI / 2].map((rotation) => (
+        {[0, Math.PI / 2].map((rotation, index) => (
           <mesh key={rotation} rotation={[0, rotation, 0]} scale={[1, height, 1]} renderOrder={17} raycast={() => undefined}>
             <primitive attach="geometry" object={geometries.beamPlane} />
-            <meshBasicMaterial
-              color={beamColor}
+            <shaderMaterial
+              ref={(material) => {
+                beamPlaneMaterials.current[index] = material
+              }}
+              vertexShader={dataBeamVertex}
+              fragmentShader={dataBeamFragment}
+              uniforms={dataBeamUniforms}
               transparent
-              opacity={beamProfile.shellOpacity * 0.85}
               blending={AdditiveBlending}
               depthWrite={false}
               side={DoubleSide}
@@ -500,9 +693,16 @@ function ChallengeBeaconNode({
       <mesh ref={scanBand} geometry={geometries.scanBand} rotation={[Math.PI / 2, 0, 0]} renderOrder={20} raycast={() => undefined}>
         <meshBasicMaterial color={hot ? COLORS.yellow : beamColor} transparent opacity={beamProfile.scanOpacity} blending={AdditiveBlending} depthWrite={false} />
       </mesh>
-      <mesh ref={topSparkle} geometry={geometries.topSparkle} position={[0, height + 0.08, 0]} scale={challengeVisualConfig.beam.crownScale} renderOrder={21} raycast={() => undefined}>
-        <meshBasicMaterial color={firstBlood || hot ? COLORS.yellow : beamColor} transparent opacity={0.28} blending={AdditiveBlending} depthWrite={false} />
-      </mesh>
+      <group ref={statusCrown} position={[0, height + 0.12, 0]} renderOrder={24} raycast={() => undefined}>
+        <ChallengeStatusCrownModel variant={challenge.status} scale={0.92} />
+        {firstBlood && !locked && (
+          <ChallengeStatusCrownModel
+            position={[0.105, 0.18, 0.018]}
+            scale={0.55}
+            variant="firstBlood"
+          />
+        )}
+      </group>
       {locked && (
         <>
           <mesh geometry={geometries.lockedSeal} rotation={[Math.PI / 2, 0, Math.PI / 4]} position={[0, height * 0.58, 0]} renderOrder={22} raycast={() => undefined}>
@@ -568,6 +768,7 @@ export function ChallengeNodes({
   const nodeGeometries = useMemo<ChallengeNodeGeometrySet>(
     () => ({
       baseDisc: new CylinderGeometry(0.24, 0.3, 0.056, 6, 1),
+      baseTick: new BoxGeometry(1, 1, 1),
       beamShell: new CylinderGeometry(0.38, 0.92, 1, 14, 1, true),
       beamPlane: new PlaneGeometry(0.07, 1),
       categoryRim: new TorusGeometry(0.3, 0.007, 6, 54),
@@ -581,7 +782,6 @@ export function ChallengeNodes({
       scanBand: new TorusGeometry(1, 0.018, 5, 36),
       statusArc: new TorusGeometry(0.34, 0.012, 5, 42, Math.PI * 1.28),
       statusRing: new TorusGeometry(0.34, 0.012, 5, 58),
-      topSparkle: new OctahedronGeometry(1, 0),
     }),
     [],
   )
@@ -631,3 +831,5 @@ export function ChallengeNodes({
     </group>
   )
 }
+
+useGLTF.preload(challengeVisualConfig.assets.statusCrowns)

@@ -1,8 +1,9 @@
 export const challengeVisualConfig = {
   assets: {
     categoryLandmarks: '/models/challenge/category-landmarks.glb',
-    coreShell: '/models/challenge/core-shell.glb',
+    coreShell: '/models/challenge/challenge-core-vault.glb',
     dataShards: '/models/challenge/data-shards.glb',
+    statusCrowns: '/models/challenge/challenge-status-crowns.glb',
   },
   core: {
     shellPulse: 0.035,
